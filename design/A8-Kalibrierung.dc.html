@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>A8 Kalibrierung</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/sub-60/tokens.css">
+<link rel="stylesheet" href="ds/sub-60/components/bundle.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 1800px; height: 1000px">
+
+<div class="step">
+<div class="cap"><b>1</b><div><span>Noch nicht bereit</span><small>Die Karte zeigt, was fehlt, als zwei kleine Fortschrittsbalken. Kein Fachbegriff, keine Formel.</small></div></div>
+<div class="ph">
+<div class="scr">
+<div class="hd"><div><div class="ov">Saison · Woche 3 von 18</div><div class="ttl">Fortschritt</div></div></div>
+<div class="c">
+<div class="lab">Dein echter Bedarf</div>
+<div class="ttl-s">Die App lernt deinen Körper kennen</div>
+<p class="muted body">Sie vergleicht, was du isst, mit dem, was die Waage zeigt. Dafür braucht sie etwas Zeit.</p>
+<div class="mb" style="--c: var(--ink)"><div class="row between xs"><span>Tage mit Einträgen</span><span class="muted">6 von 10</span></div><div class="trk"><div class="fil" style="width: 60%"></div></div></div>
+<div class="mb" style="--c: var(--ink)"><div class="row between xs"><span>Wiegungen</span><span class="muted">3 von 4</span></div><div class="trk"><div class="fil" style="width: 75%"></div></div></div>
+<p class="xs muted">Noch 4 Tage eintragen und 1 Mal wiegen.</p>
+</div>
+</div>
+<div class="nav"><div class="ni"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus"><i class="ic i-plus"></i></div><div class="ni on"><i class="ic i-chart"></i>Fortschritt</div><div class="ni"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+<div class="step">
+<div class="cap"><b>2</b><div><span>Bereit: Vorschlag mit Begründung</span><small>Zwei Zahlen nebeneinander: Formel und gemessen. Die App ändert nichts ohne deine Bestätigung.</small></div></div>
+<div class="ph">
+<div class="scr">
+<div class="hd"><div><div class="ov">Saison · Woche 5 von 18</div><div class="ttl">Fortschritt</div></div></div>
+<div class="c">
+<div class="lab">Dein echter Bedarf</div>
+<div class="s6-grid two" style="gap: 8px">
+<div class="s6-metric" style="padding: 12px"><div class="s6-metric-label">Formel</div><div class="s6-metric-value">2790<span class="s6-metric-unit">kcal</span></div></div>
+<div class="s6-metric" style="padding: 12px"><div class="s6-metric-label">Gemessen</div><div class="s6-metric-value">2940<span class="s6-metric-unit">kcal</span></div></div>
+</div>
+<p class="body">In 20 Tagen hast du im Schnitt <b>2400 kcal</b> gegessen und dabei <b>0,5 kg pro Woche</b> verloren. Dein Körper braucht also etwa <b>150 kcal mehr</b>, als die Formel sagt.</p>
+<button class="s6-btn s6-btn-primary w">+150 kcal übernehmen</button>
+<button class="s6-btn s6-btn-ghost w">Nicht ändern</button>
+</div>
+<div class="c tight"><div class="lab">Wie sicher ist das?</div><p class="xs muted">20 Tage Einträge, 8 Wiegungen. Je mehr du einträgst, desto genauer wird die Zahl.</p></div>
+</div>
+<div class="nav"><div class="ni"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus" style="background: var(--well); color: var(--ink); box-shadow: var(--shadow-edge)"><i class="ic i-plus"></i></div><div class="ni on"><i class="ic i-chart"></i>Fortschritt</div><div class="ni"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+<div class="step">
+<div class="cap"><b>3</b><div><span>Übernommen</span><small>Karte bestätigt kurz, was sich geändert hat. Das Tagesziel auf «Heute» passt sich an.</small></div></div>
+<div class="ph">
+<div class="scr">
+<div class="hd"><div><div class="ov">Saison · Woche 5 von 18</div><div class="ttl">Fortschritt</div></div></div>
+<div class="c">
+<div class="lab">Dein echter Bedarf</div>
+<div class="row" style="gap: 12px"><i class="ic i-check ok"></i><div><div class="strong">Angepasst: 2940 kcal</div><div class="xs muted">Dein Tagesziel steigt um 150 kcal. Nächste Prüfung in 14 Tagen.</div></div></div>
+<button class="s6-btn s6-btn-quiet w">Rückgängig</button>
+</div>
+</div>
+<div class="nav"><div class="ni"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus"><i class="ic i-plus"></i></div><div class="ni on"><i class="ic i-chart"></i>Fortschritt</div><div class="ni"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+<div class="step">
+<div class="cap"><b>4</b><div><span>Heute zeigt die Wirkung</span><small>Ein Hinweis erklärt, warum das Ziel höher ist als gestern. Kein stilles Umschalten.</small></div></div>
+<div class="ph">
+<div class="scr">
+<div class="hd"><div><div class="ov">Woche 5 · Build I</div><div class="ttl">Heute</div></div><div class="cbs"><div class="cb"><i class="ic i-l"></i></div><div class="cb"><i class="ic i-r"></i></div></div></div>
+<div class="hero mod">
+<div class="row between"><span class="s6-tag"><i style="--c: var(--kraft)"></i>Moderat-Tag</span><span class="xs muted">92 Tage bis Basel</span></div>
+<div class="ttl-s">Kraft 1</div>
+<div class="big">
+<div class="s6-ring" style="--c: var(--kraft)"><svg width="132" height="132" viewBox="0 0 132 132"><circle class="s6-ring-track" cx="66" cy="66" r="58" fill="none" stroke-width="10"/><circle class="s6-ring-bar" cx="66" cy="66" r="58" fill="none" stroke-width="10" stroke-dasharray="364.4" stroke-dashoffset="364.4"/></svg><div class="s6-ring-in"><div class="s6-ring-val">2640</div><div class="s6-ring-label">übrig</div></div></div>
+<dl class="kv" style="margin: 0"><div><dt>Ziel</dt><b>2640</b></div><div><dt>Gegessen</dt><b>0</b></div></dl>
+</div>
+<div class="banner"><i class="ic i-chart"></i><div class="xs">+150 kcal seit der Kalibrierung. Dein Gewicht zeigt, dass du mehr brauchst.</div></div>
+</div>
+<div class="c tight"><div class="meal-h"><span class="lab">Frühstück</span><span class="add"><i class="ic i-plus s"></i></span></div><div class="xs muted">Noch nichts eingetragen</div></div>
+</div>
+<div class="nav"><div class="ni on"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus"><i class="ic i-plus"></i></div><div class="ni"><i class="ic i-chart"></i>Fortschritt</div><div class="ni"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1800,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

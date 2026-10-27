@@ -1,0 +1,63 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-26T18:30:00Z" },
+  "title": "Basel Ernährung Design",
+  "launch": { "view": "canvas", "page": "uebersicht" },
+  "pages": [
+    { "id": "uebersicht", "name": "Übersicht" },
+    { "id": "screens", "name": "Screens" },
+    { "id": "ablaeufe", "name": "Abläufe" },
+    { "id": "zustaende", "name": "Sonderfälle" }
+  ],
+  "boards": {
+    "Main.dc.html": { "title": "Übersicht und Prüfliste", "page": "uebersicht", "x": 0, "y": 0, "w": 1280, "h": 1240 },
+    "Katalog.dc.html": { "title": "Alle Screens", "page": "screens", "x": 0, "y": 260, "w": 2238, "h": 1900 },
+    "A1-Einrichten.dc.html": { "title": "A1 Einrichten", "page": "ablaeufe", "x": 0, "y": 260, "w": 1362, "h": 1000 },
+    "A2-Essen-suchen.dc.html": { "title": "A2 Essen suchen und hinzufügen", "page": "ablaeufe", "x": 0, "y": 1380, "w": 2238, "h": 1000 },
+    "A3-Schnell-erfassen.dc.html": { "title": "A3 Nur Kalorien erfassen", "page": "ablaeufe", "x": 0, "y": 2500, "w": 1362, "h": 1000 },
+    "A4-Mahlzeit-anlegen.dc.html": { "title": "A4 Standardmahlzeit anlegen", "page": "ablaeufe", "x": 0, "y": 3620, "w": 2238, "h": 1000 },
+    "A5-Mahlzeit-essen.dc.html": { "title": "A5 Standardmahlzeit essen", "page": "ablaeufe", "x": 0, "y": 4740, "w": 1362, "h": 1000 },
+    "A6-Tag-kopieren.dc.html": { "title": "A6 Tag von gestern übernehmen", "page": "ablaeufe", "x": 0, "y": 5860, "w": 924, "h": 1000 },
+    "A7-Wiegen-Trend.dc.html": { "title": "A7 Wiegen und Trend", "page": "ablaeufe", "x": 2400, "y": 260, "w": 1362, "h": 1000 },
+    "A8-Kalibrierung.dc.html": { "title": "A8 Kalibrierung", "page": "ablaeufe", "x": 2400, "y": 1380, "w": 1800, "h": 1000 },
+    "A9-Check-in.dc.html": { "title": "A9 Wochen-Check und Training bewerten", "page": "ablaeufe", "x": 2400, "y": 2500, "w": 1362, "h": 1000 },
+    "A10-Bedarf-Tempo.dc.html": { "title": "A10 Bedarf und Tempo ändern", "page": "ablaeufe", "x": 2400, "y": 3620, "w": 1362, "h": 1000 },
+    "A11-Plan-Wasser.dc.html": { "title": "A11 Plan abhaken und Wasser", "page": "ablaeufe", "x": 2400, "y": 4740, "w": 1362, "h": 1000 },
+    "A12-Daten.dc.html": { "title": "A12 Backup und Löschen", "page": "ablaeufe", "x": 2400, "y": 5860, "w": 1362, "h": 1000 },
+    "Z1-Sonderfaelle.dc.html": { "title": "Z1 Sonderfälle im Tagebuch", "page": "zustaende", "x": 0, "y": 260, "w": 2238, "h": 1000 },
+    "Z2-Fortschritt-Zustaende.dc.html": { "title": "Z2 Aussagen im Fortschritt", "page": "zustaende", "x": 0, "y": 1380, "w": 1800, "h": 1000 }
+  },
+  "order": [
+    "Main.dc.html",
+    "Katalog.dc.html",
+    "A1-Einrichten.dc.html",
+    "A2-Essen-suchen.dc.html",
+    "A3-Schnell-erfassen.dc.html",
+    "A4-Mahlzeit-anlegen.dc.html",
+    "A5-Mahlzeit-essen.dc.html",
+    "A6-Tag-kopieren.dc.html",
+    "A7-Wiegen-Trend.dc.html",
+    "A8-Kalibrierung.dc.html",
+    "A9-Check-in.dc.html",
+    "A10-Bedarf-Tempo.dc.html",
+    "A11-Plan-Wasser.dc.html",
+    "A12-Daten.dc.html",
+    "Z1-Sonderfaelle.dc.html",
+    "Z2-Fortschritt-Zustaende.dc.html"
+  ],
+  "notes": {
+    "t-screens": { "x": 0, "y": 0, "page": "screens", "kind": "title1", "text": "Alle Screens", "maxW": 2238 },
+    "t-flows-1": { "x": 0, "y": 0, "page": "ablaeufe", "kind": "title1", "text": "Abläufe, Teil 1: erfassen", "maxW": 2238 },
+    "t-flows-2": { "x": 2400, "y": 0, "page": "ablaeufe", "kind": "title1", "text": "Abläufe, Teil 2: verstehen und einstellen", "maxW": 1800 },
+    "t-states": { "x": 0, "y": 0, "page": "zustaende", "kind": "title1", "text": "Sonderfälle", "maxW": 2238 }
+  },
+  "designSystems": [
+    {
+      "title": "Sub-60",
+      "namespace": "sub-60",
+      "artifact": "https://claude.ai/artifact/6dE23ubXYxbcUV4ZHmqjea",
+      "version": "1793049855-e37a",
+      "copiedAt": "2026-10-26T18:30:00Z"
+    }
+  ]
+}

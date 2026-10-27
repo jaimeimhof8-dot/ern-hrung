@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>A12 Backup und Löschen</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/sub-60/tokens.css">
+<link rel="stylesheet" href="ds/sub-60/components/bundle.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="board" style="width: 1362px; height: 1000px">
+
+<div class="step">
+<div class="cap"><b>1</b><div><span>Profil, Abschnitt «Daten»</span><small>Alles bleibt lokal. Drei ruhige Knöpfe, das Löschen steht klein und getrennt am Ende.</small></div></div>
+<div class="ph">
+<div class="scr" style="padding-top: 60px">
+<div class="c">
+<div class="lab">Daten</div>
+<button class="s6-btn s6-btn-quiet w">Backup speichern (JSON)</button>
+<button class="s6-btn s6-btn-quiet w">Tagebuch als Tabelle (CSV)</button>
+<button class="s6-btn s6-btn-quiet w">Backup laden</button>
+<p class="xs muted">Alles liegt nur auf diesem Gerät. Der Trainingsplan ist fest eingebaut (Stand 18.09.2026).</p>
+<div style="border-top: 1px solid var(--line); padding-top: 10px"><span class="link danger">Alle Daten löschen …</span></div>
+</div>
+<p class="xs muted" style="text-align: center">Kein Ersatz für ärztliche oder sportmedizinische Beratung.</p>
+</div>
+<div class="nav"><div class="ni"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus"><i class="ic i-plus"></i></div><div class="ni"><i class="ic i-chart"></i>Fortschritt</div><div class="ni on"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+<div class="step">
+<div class="cap"><b>2</b><div><span>Backup gespeichert</span><small>Eine kurze Meldung unten nennt den Dateinamen. Kein Dialog, der den Ablauf blockiert.</small></div></div>
+<div class="ph">
+<div class="scr" style="padding-top: 60px">
+<div class="c">
+<div class="lab">Daten</div>
+<button class="s6-btn s6-btn-quiet w">Backup speichern (JSON)</button>
+<button class="s6-btn s6-btn-quiet w">Tagebuch als Tabelle (CSV)</button>
+<button class="s6-btn s6-btn-quiet w">Backup laden</button>
+<div style="border-top: 1px solid var(--line); padding-top: 10px"><span class="link danger">Alle Daten löschen …</span></div>
+</div>
+</div>
+<div class="banner" style="position: absolute; left: 16px; right: 16px; bottom: 96px; background: var(--surface-2); box-shadow: var(--shadow-lift)"><i class="ic i-check ok"></i><div class="grow xs">Gespeichert: sub60-backup-2026-10-26.json</div></div>
+<div class="nav"><div class="ni"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus"><i class="ic i-plus"></i></div><div class="ni"><i class="ic i-chart"></i>Fortschritt</div><div class="ni on"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+<div class="step">
+<div class="cap"><b>3</b><div><span>Löschen: zweite Stufe</span><small>Der Hinweis nennt Folge und Unumkehrbarkeit. Der gefährliche Knopf ist rot und steht links vom Abbrechen.</small></div></div>
+<div class="ph">
+<div class="scr" style="padding-top: 60px">
+<div class="c">
+<div class="lab">Daten</div>
+<button class="s6-btn s6-btn-quiet w">Backup speichern (JSON)</button>
+<div style="border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 10px">
+<p class="body"><b>Wirklich alles löschen?</b> Tagebuch, Gewichte und Mahlzeiten sind danach weg. Das lässt sich nicht rückgängig machen.</p>
+<div class="row" style="gap: 8px"><button class="s6-btn s6-btn-quiet" style="flex: 1; color: var(--danger)">Ja, alles löschen</button><button class="s6-btn s6-btn-quiet" style="flex: 1">Abbrechen</button></div>
+</div>
+</div>
+</div>
+<div class="nav"><div class="ni"><i class="ic i-today"></i>Heute</div><div class="ni"><i class="ic i-week"></i>Woche</div><div class="plus"><i class="ic i-plus"></i></div><div class="ni"><i class="ic i-chart"></i>Fortschritt</div><div class="ni on"><i class="ic i-user"></i>Profil</div></div>
+</div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1362,"height":1000}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

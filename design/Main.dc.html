@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Übersicht und Prüfliste</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/sub-60/tokens.css">
+<link rel="stylesheet" href="ds/sub-60/components/bundle.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>body{margin:0}</style>
+</helmet>
+<div class="doc" style="width: 1280px; height: 1240px">
+<div>
+<div class="ov" style="color: var(--accent-ink)">Basel Sub-60 · Ernährung · Design-Vorschlag vor dem Codieren</div>
+<h1 style="margin-top: 14px">Abnehmen tracken.<br>Ohne alles zu wägen.</h1>
+<p class="muted" style="max-width: 760px; margin-top: 18px">Auf diesem Canvas siehst du jeden Screen und jeden Ablauf der App als Bildreihe, im Look deiner Trainings-App. Noch ist nichts codiert. Prüfe Design und Bedienung, kommentiere direkt auf den Bildern oder ändere Texte und Abstände im Editor. Danach baue ich genau das.</p>
+</div>
+
+<div class="g3">
+<div class="c">
+<div class="lab">Seite «Screens»</div>
+<div class="ttl-s">Alle Hauptansichten</div>
+<p class="muted sm">Einrichten, Heute, Woche, Fortschritt, Profil. Heute in voller Länge.</p>
+</div>
+<div class="c">
+<div class="lab">Seite «Abläufe»</div>
+<div class="ttl-s">12 Abläufe als Bildreihe</div>
+<p class="muted sm">Jede Reihe zeigt Schritt für Schritt, was du tippst und was danach passiert.</p>
+</div>
+<div class="c">
+<div class="lab">Seite «Sonderfälle»</div>
+<div class="ttl-s">Leer, zu viel, nichts gefunden</div>
+<p class="muted sm">Zustände, die im Alltag vorkommen: leerer Tag, Überschuss, Plateau, Schutzmodus.</p>
+</div>
+</div>
+
+<div class="g2">
+<div>
+<h2>Neu: weniger Aufwand, trotzdem genau</h2>
+<ul>
+<li><b>Standardmahlzeiten.</b> Du wiegst ein Gericht einmal. Danach ist es ein Tipp, und der Wert stimmt.</li>
+<li><b>Wiegen-Hinweis nur dort, wo es zählt.</b> Öl, Nüsse, Reis, Nudeln, Käse zeigen eine Waage. Gemüse und Salat darfst du schätzen.</li>
+<li><b>Kalibrierung.</b> Die App vergleicht Tagebuch und Waage und rechnet deinen echten Bedarf aus. Systematische Fehler beim Eintragen gleicht sie damit aus.</li>
+<li><b>Schnellwahl unter jeder Mahlzeit.</b> Deine Standardmahlzeiten und letzten Lebensmittel liegen als Chips direkt auf «Heute».</li>
+</ul>
+</div>
+<div>
+<h2>Design wie die Trainings-App</h2>
+<ul>
+<li>Kicker in Versalien über grossem Barlow-Titel, Zahlen in Barlow Condensed.</li>
+<li>Karten ohne Rand, nur helle Oberkante. Ein Gold pro Ansicht: der Plus-Knopf oder die Hauptaktion.</li>
+<li>Schwebende Tab-Leiste mit Icons und dem Plus in der Mitte.</li>
+<li>Farben sind Bedeutung, keine Dekoration:</li>
+</ul>
+<div style="display: grid; gap: 8px; margin-top: 14px">
+<div class="sw"><i style="--c: var(--lauf)"></i>Low-Tag: Ruhe, Rad Zone 2, lockerer Lauf (Defizit)</div>
+<div class="sw"><i style="--c: var(--kraft)"></i>Moderat-Tag: Kraft (kleines Defizit)</div>
+<div class="sw"><i style="--c: var(--station)"></i>High-Tag: Intervalle, Stationen, Rennen (Erhaltung)</div>
+</div>
+</div>
+</div>
+
+<div class="g2">
+<div class="c">
+<div class="lab">Tipps pro Aktion</div>
+<table class="tbl">
+<thead><tr><th>Aktion</th><th class="r">Tipps</th></tr></thead>
+<tbody>
+<tr><td>Standardmahlzeit essen (Schnellwahl)</td><td class="r">1</td></tr>
+<tr><td>Tag von gestern übernehmen</td><td class="r">1</td></tr>
+<tr><td>Plan-Mahlzeit abhaken</td><td class="r">1</td></tr>
+<tr><td>Bekanntes Lebensmittel aus «Zuletzt»</td><td class="r">3</td></tr>
+<tr><td>Nur Kalorien erfassen</td><td class="r">3 + Zahl</td></tr>
+<tr><td>Gewicht eintragen</td><td class="r">2 + Zahl</td></tr>
+</tbody>
+</table>
+</div>
+<div class="c">
+<div class="lab">Was ich von dir wissen will</div>
+<ul class="body" style="margin: 0; padding-left: 18px; display: grid; gap: 8px">
+<li>Ist die Schnellwahl unter jeder Mahlzeit genug, oder brauchst du einen eigenen Tab «Mahlzeiten»?</li>
+<li>Soll der Wiegen-Hinweis beim Eintragen erscheinen oder erst nach dem Speichern?</li>
+<li>Reicht die Wochenleiste oben auf «Heute», oder willst du weiter die Pfeile für den Tag?</li>
+<li>Ist die Kalibrierung verständlich erklärt, und willst du sie bestätigen oder automatisch?</li>
+<li>Fehlt ein Ablauf, den du täglich brauchst?</li>
+</ul>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":1240}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
