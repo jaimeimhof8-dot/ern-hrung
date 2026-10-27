@@ -25,6 +25,12 @@ export interface Settings {
   /** aus Tagebuch und Gewichtstrend ermittelte Korrektur des berechneten Bedarfs (kcal) */
   calib?: number;
   calibDate?: string;
+  /** Kalibrier-Vorschlag abgelehnt am (nächster Vorschlag frühestens nach 14 Tagen) */
+  calibSkip?: string;
+  /** Wert vor der letzten Kalibrierung, für Rückgängig */
+  calibPrev?: number;
+  /** Zielgewicht erreicht: Erhaltung statt Defizit */
+  maintain?: boolean;
   weightKg: number;
   bodyFatPercent: number;
   goalKg: number;
@@ -83,6 +89,8 @@ export interface Entry {
   /** Anzeige, z. B. „150 g“ */
   amount?: string;
   foodId?: string;
+  /** nur Kalorien geschätzt, nicht gewogen */
+  est?: boolean;
 }
 
 export interface DayLog {
@@ -447,6 +455,10 @@ export function computeDay(date: string, d: Data): DayPlan {
   } else if (weekNo >= PEAK_WEEK) {
     deficit = 0;
     notes.push('Peak-Phase: ab jetzt kein Defizit mehr. Du isst für die Leistung.');
+  }
+  if (s.maintain && deficit > 0) {
+    deficit = 0;
+    notes.push('Erhaltung: Zielgewicht erreicht, kein Defizit mehr.');
   }
   const prot = isProtected(date, s);
   if (prot) {

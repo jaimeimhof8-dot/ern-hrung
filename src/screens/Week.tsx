@@ -1,6 +1,6 @@
-import { DAY_LABEL, addDays, computeDay, parseISO, toISO, weekDeficitKg, type Data } from '../lib/engine';
+import { addDays, computeDay, parseISO, toISO, weekDeficitKg, type Data } from '../lib/engine';
 import { totals } from '../lib/analytics';
-import { TYPE_CLASS } from '../ui';
+import { Head, Metric, TYPE_COLOR, fmt, shortDate } from '../ui';
 
 const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const mondayOf = (iso: string) => addDays(iso, -((parseISO(iso).getDay() + 6) % 7));
@@ -16,39 +16,38 @@ export default function Week({ date, setDate, data, open }: { date: string; setD
 
   return (
     <>
-      <div className="datebar">
-        <button onClick={() => setDate(addDays(mon, -7))} aria-label="Vorwoche">‹</button>
-        <div>
-          <strong>{plans[0].weekNo >= 1 ? `Woche ${plans[0].weekNo}` : 'Vor dem Plan'}</strong>
-          <span className="muted small">{plans[0].weekName}</span>
-        </div>
-        <button onClick={() => setDate(addDays(mon, 7))} aria-label="Folgewoche">›</button>
-      </div>
-      <section className="card">
+      <Head
+        kicker={`${shortDate(mon)} – ${shortDate(addDays(mon, 6))}`}
+        title={plans[0].weekNo >= 1 ? `Woche ${plans[0].weekNo}` : 'Vor dem Plan'}
+        prev={['Vorwoche', () => setDate(addDays(mon, -7))]}
+        next={['Folgewoche', () => setDate(addDays(mon, 7))]}
+      />
+      {plans[0].weekName && <div className="xs muted" style={{ padding: '0 4px' }}>{plans[0].weekName}</div>}
+      <section className="c tight">
         {plans.map((p, i) => {
           const eaten = Math.round(totals(data.diary[p.date]).kcal);
           const pct = Math.min(100, (eaten / p.kcal) * 100);
+          const c = TYPE_COLOR[p.dayType];
           return (
-            <button key={p.date} className={`weekrow ${p.date === today ? 'today' : ''}`} onClick={() => open(p.date)} aria-label={`${WD[i]}: ${p.trainingDay?.t ?? 'frei'}, Ziel ${p.kcal} kcal, ${DAY_LABEL[p.dayType]}`}>
-              <span className="dow">{WD[i]}</span>
-              <span className="wmain">
-                <span className="wtitle"><span className={`dot ${TYPE_CLASS[p.dayType]}`} />{p.trainingDay ? p.trainingDay.t : '–'}</span>
-                <span className="mini"><span style={{ width: `${pct}%` }} className={eaten > p.kcal * 1.05 ? 'over' : ''} /></span>
+            <button key={p.date} className="li" style={{ width: '100%', textAlign: 'left', background: p.date === today ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined, borderRadius: p.date === today ? 'var(--r-s)' : undefined }} onClick={() => open(p.date)} aria-label={`${WD[i]}: ${p.trainingDay?.t ?? 'frei'}, Ziel ${p.kcal} kcal`}>
+              <span className="mono muted" style={{ width: 28 }}>{WD[i]}</span>
+              <span className="t">
+                <span className="strong"><span className="sw" style={{ display: 'inline-flex', '--c': c } as React.CSSProperties}><i />{p.trainingDay ? p.trainingDay.t : 'frei'}</span></span>
+                {eaten > 0 && (
+                  <span className="mb" style={{ '--c': eaten > p.kcal * 1.05 ? 'var(--danger)' : c } as React.CSSProperties}><span className="trk"><span className="fil" style={{ width: `${pct}%`, display: 'block' }} /></span></span>
+                )}
               </span>
-              <span className="wk">
-                <span className="num-s">{p.kcal}</span>
-                <span className="muted small">{eaten > 0 ? `${eaten} gegessen` : ''}</span>
-              </span>
+              <span className="k">{p.kcal}</span>
             </button>
           );
         })}
       </section>
-      <section className="card stats">
-        <div><strong>{avg}</strong><span>Ø Ziel kcal/Tag</span></div>
-        <div><strong>{kg > 0.005 ? `−${kg.toFixed(2).replace('.', ',')} kg` : '0 kg'}</strong><span>erwartet laut Plan</span></div>
-        <div><strong>{eatenAvg ?? '–'}</strong><span>Ø gegessen ({logged.length} Tage)</span></div>
-        <div><strong>{eatenAvg ? `${eatenAvg - avg > 0 ? '+' : ''}${eatenAvg - avg}` : '–'}</strong><span>Abweichung vom Ziel</span></div>
-      </section>
+      <div className="s6-grid two" style={{ gap: 8 }}>
+        <Metric label="Ø Ziel" value={String(avg)} unit="kcal" />
+        <Metric label="Erwartet" value={kg > 0.005 ? `−${fmt(kg, 2)}` : '0'} unit="kg" />
+        <Metric label="Ø gegessen" value={eatenAvg ? String(eatenAvg) : '–'} unit={logged.length ? `${logged.length} Tage` : ''} />
+        <Metric label="Abweichung" value={eatenAvg ? `${eatenAvg - avg > 0 ? '+' : eatenAvg - avg < 0 ? '−' : ''}${Math.abs(eatenAvg - avg)}` : '–'} unit={eatenAvg ? 'kcal' : ''} />
+      </div>
     </>
   );
 }

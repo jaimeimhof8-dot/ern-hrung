@@ -13,7 +13,7 @@ import {
   type Settings,
 } from '../lib/engine';
 import { parseBackup, toCsv } from '../lib/storage';
-import { NumField, type Update } from '../ui';
+import { Head, Icon, Metric, NumField, fmt, shortDate, type Notify, type Update } from '../ui';
 
 const ACTIVITY: [number, string][] = [
   [1.2, 'Kaum Bewegung (Büro, wenig Sport)'],
@@ -29,8 +29,6 @@ const RATES: [number, string][] = [
   [0.6, 'Hart'],
 ];
 
-const fmt = (n: number, d = 2) => n.toFixed(d).replace('.', ',');
-
 function download(name: string, text: string, type: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type }));
@@ -39,13 +37,12 @@ function download(name: string, text: string, type: string) {
   URL.revokeObjectURL(a.href);
 }
 
-export default function Profile({ data, update }: { data: Data; update: Update }) {
+export default function Profile({ data, update, notify }: { data: Data; update: Update; notify: Notify }) {
   const s = data.settings;
   const today = toISO(new Date());
   const weight = currentWeight(today, data);
   const set = (patch: Partial<Settings>) => update((p) => ({ ...p, settings: { ...p.settings, ...patch } }));
   const [armed, setArmed] = useState(false);
-  const [msg, setMsg] = useState('');
 
   const needs = useMemo(
     () => (s.age && s.heightCm ? calcNeeds({ ...s, age: s.age, heightCm: s.heightCm, weightKg: weight }) : null),
@@ -64,105 +61,107 @@ export default function Profile({ data, update }: { data: Data; update: Update }
     const d = parseBackup(await f.text());
     if (d) {
       update(() => d);
-      setMsg('Backup geladen.');
-    } else setMsg('Datei konnte nicht gelesen werden.');
+      notify('Backup geladen');
+    } else notify('Datei konnte nicht gelesen werden');
+  };
+  const save = (name: string, text: string, type: string) => {
+    download(name, text, type);
+    notify(`Gespeichert: ${name}`);
   };
 
   return (
     <>
-      <h1 className="pagetitle">Profil</h1>
+      <Head kicker="Dein Körper" title="Profil" />
 
-      <section className="card">
-        <h2>Kalorienbedarf</h2>
-        <div className="pills" role="group" aria-label="Geschlecht">
+      <section className="c">
+        <div className="lab">Kalorienbedarf</div>
+        <div className="seg" role="group" aria-label="Geschlecht">
           {(['m', 'w'] as Sex[]).map((x) => (
-            <button key={x} className={`pill ${s.sex === x ? 'on' : ''}`} onClick={() => set({ sex: x })}>{x === 'm' ? 'Männlich' : 'Weiblich'}</button>
+            <button key={x} className={s.sex === x ? 'on' : ''} onClick={() => set({ sex: x })} style={{ textAlign: 'center', padding: '10px 6px', minHeight: 44, borderRadius: 999, font: '500 13px/18px var(--font-body)', color: s.sex === x ? 'var(--ink)' : 'var(--muted)', background: s.sex === x ? 'var(--card)' : 'none', boxShadow: s.sex === x ? 'var(--shadow-edge)' : 'none', fontWeight: s.sex === x ? 600 : 500 }}>
+              {x === 'm' ? 'Männlich' : 'Weiblich'}
+            </button>
           ))}
         </div>
-        <div className="grid2">
+        <div className="cols2">
           <NumField label="Alter" value={s.age} onChange={(v) => v && set({ age: Math.round(v) })} />
-          <NumField label="Größe" suffix="cm" value={s.heightCm} onChange={(v) => v && set({ heightCm: Math.round(v) })} />
+          <NumField label="Grösse" suffix="cm" value={s.heightCm} onChange={(v) => v && set({ heightCm: Math.round(v) })} />
           <NumField label="Zielgewicht" suffix="kg" value={s.goalKg} onChange={(v) => v && set({ goalKg: v })} />
           <NumField label="Körperfett" suffix="%" value={s.bodyFatPercent} onChange={(v) => v && set({ bodyFatPercent: v, bfKnown: true })} hint={s.bfKnown ? 'Wird für die Berechnung genutzt' : 'Schätzung, noch nicht genutzt'} />
         </div>
-        <label className="field">
+        <label className="f">
           <span>Aktivität</span>
-          <select value={s.activity} onChange={(e) => set({ activity: parseFloat(e.target.value) })}>
-            {ACTIVITY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
+          <div className="in">
+            <select value={s.activity} onChange={(e) => set({ activity: parseFloat(e.target.value) })}>
+              {ACTIVITY.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+            <Icon n="r" s />
+          </div>
         </label>
-        {s.bfKnown && (
-          <button className="link small" onClick={() => set({ bfKnown: false })}>Körperfett ignorieren (Mifflin-St Jeor nutzen)</button>
-        )}
+        {s.bfKnown && <button className="link plain" onClick={() => set({ bfKnown: false })}>Körperfett ignorieren (Mifflin-St Jeor nutzen)</button>}
 
         {needs ? (
-          <div className="result" aria-live="polite">
-            <div><span>Grundumsatz</span><strong>{needs.bmr} kcal</strong></div>
-            <div><span>Gesamtumsatz</span><strong>{s.tdeeOverride ?? needs.tdee} kcal</strong></div>
-            <p className="muted small">Formel: {needs.method}. Der Trainingsplan hebt oder senkt das Tagesziel zusätzlich nach Belastung.</p>
-          </div>
+          <>
+            <div className="s6-grid two" style={{ gap: 8 }} aria-live="polite">
+              <Metric small label="Grundumsatz" value={String(needs.bmr)} unit="kcal" />
+              <Metric small label="Gesamtumsatz" value={String(s.tdeeOverride ?? needs.tdee)} unit="kcal" />
+            </div>
+            <p className="xs muted">Formel: {needs.method}. Der Trainingsplan hebt oder senkt das Tagesziel zusätzlich nach Belastung.{s.calib ? ` Kalibrierung: ${s.calib > 0 ? '+' : '−'}${Math.abs(s.calib)} kcal.` : ''}</p>
+          </>
         ) : (
-          <p className="warn-text small pad">Trage Alter und Größe ein, dann berechnet die App deinen Bedarf.</p>
+          <p className="sm est">Trage Alter und Grösse ein, dann berechnet die App deinen Bedarf.</p>
         )}
         <NumField label="Gesamtumsatz selbst festlegen (optional)" suffix="kcal" value={s.tdeeOverride} onChange={(v) => set({ tdeeOverride: v ? Math.round(v) : undefined })} hint="Leer lassen für die automatische Berechnung" />
       </section>
 
-      <section className="card">
-        <h2>Abnahme-Tempo</h2>
-        <div className="pills tight" role="group" aria-label="Tempo">
+      <section className="c">
+        <div className="lab">Abnahme-Tempo</div>
+        <div className="rates" role="group" aria-label="Tempo">
           {RATES.map(([r, l]) => (
-            <button key={r} className={`pill sm ${s.ratePerWeek === r ? 'on' : ''}`} onClick={() => set({ ratePerWeek: r })}>
-              {l}<small>{fmt(r)} kg</small>
+            <button key={r} className={`chip ${s.ratePerWeek === r ? 'on' : ''}`} onClick={() => set({ ratePerWeek: r })}>
+              {l}
+              <small>{fmt(r, 2)} kg</small>
             </button>
           ))}
         </div>
-        <div className="result">
-          <div><span>Ø Tagesziel (nächste 7 Tage)</span><strong>{expected.avg} kcal</strong></div>
-          <div><span>Erwartete Abnahme</span><strong>≈ {fmt(expected.kg)} kg pro Woche</strong></div>
-          <p className="muted small">
-            An harten Trainingstagen isst du bewusst auf Erhaltung. Die App senkt die Kalorien nie so weit, dass deine Energieverfügbarkeit unter 30 kcal pro kg fettfreier Masse fällt. Deshalb kann die tatsächliche Abnahme unter dem Wunschtempo liegen.
+        <p className="xs muted">Ø Tagesziel {expected.avg} kcal · erwartet ≈ {fmt(expected.kg, 2)} kg pro Woche.</p>
+        <div className="tip soft"><div>An harten Trainingstagen isst du bewusst auf Erhaltung. Die App senkt die Kalorien nie so weit, dass deine Energieverfügbarkeit unter 30 kcal pro kg fettfreier Masse fällt. Deshalb kann die tatsächliche Abnahme unter dem Wunschtempo liegen.</div></div>
+      </section>
+
+      <section className="c">
+        <div className="lab">Schutzmodus</div>
+        <div className="row between">
+          <p className="body grow muted">
+            Defizit aus, mehr essen.{protectedNow && !s.redsStop && s.protectUntil ? ` Automatisch aktiv bis ${shortDate(s.protectUntil)}.` : ''}
           </p>
+          <button className={`chip ${s.redsStop ? 'on' : ''}`} onClick={() => set({ redsStop: !s.redsStop })} aria-pressed={s.redsStop}>{s.redsStop ? 'An' : 'Aus'}</button>
         </div>
+        <p className="xs muted">Bei Dauermüdigkeit, schlechtem Schlaf oder Libidoverlust. Die App schaltet ihn auch selbst ein, wenn du zweimal «Kaputt» meldest.</p>
       </section>
 
-      <section className="card">
-        <h2>Schutzmodus</h2>
-        <p className="muted small">
-          Bei Dauermüdigkeit, schlechtem Schlaf oder Libidoverlust: Defizit aus, mehr essen. Die App schaltet das auch selbst ein, wenn du zweimal „Kaputt“ meldest.
-        </p>
-        <label className="toggle">
-          <input type="checkbox" checked={s.redsStop} onChange={(e) => set({ redsStop: e.target.checked })} />
-          <span>Schutzmodus manuell einschalten{protectedNow && !s.redsStop ? ` (automatisch aktiv bis ${s.protectUntil})` : ''}</span>
+      <section className="c">
+        <div className="lab">Daten</div>
+        <button className="s6-btn s6-btn-quiet w" onClick={() => save(`sub60-backup-${today}.json`, JSON.stringify(data, null, 2), 'application/json')}>Backup speichern (JSON)</button>
+        <button className="s6-btn s6-btn-quiet w" onClick={() => save(`sub60-tagebuch-${today}.csv`, toCsv(data), 'text/csv')}>Tagebuch als Tabelle (CSV)</button>
+        <label className="s6-btn s6-btn-quiet w">
+          Backup laden
+          <input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importData(e.target.files[0])} />
         </label>
-      </section>
-
-      <section className="card">
-        <h2>Daten</h2>
-        <div className="row gap wrap">
-          <button className="ghost" onClick={() => download(`sub60-backup-${today}.json`, JSON.stringify(data, null, 2), 'application/json')}>Backup (JSON)</button>
-          <button className="ghost" onClick={() => download(`sub60-tagebuch-${today}.csv`, toCsv(data), 'text/csv')}>Tagebuch (CSV)</button>
-          <label className="ghost filebtn">
-            Backup laden
-            <input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importData(e.target.files[0])} />
-          </label>
-        </div>
-        {msg && <p className="small pad" role="status">{msg}</p>}
-        <p className="muted small">Alles liegt nur lokal auf diesem Gerät. Der Trainingsplan ist fest eingebaut (Stand 18.09.2026).</p>
-        <div className="danger-zone">
+        <p className="xs muted">Alles liegt nur auf diesem Gerät. Der Trainingsplan ist fest eingebaut (Stand 18.09.2026).</p>
+        <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
           {armed ? (
             <>
-              <p className="small">Wirklich alles löschen? Das lässt sich nicht rückgängig machen.</p>
-              <div className="row gap">
-                <button className="ghost danger" onClick={() => { update(() => DEFAULT_DATA); setArmed(false); }}>Ja, alles löschen</button>
-                <button className="ghost" onClick={() => setArmed(false)}>Abbrechen</button>
+              <p className="body"><b>Wirklich alles löschen?</b> Tagebuch, Gewichte und Mahlzeiten sind danach weg. Das lässt sich nicht rückgängig machen.</p>
+              <div className="row" style={{ gap: 8 }}>
+                <button className="s6-btn s6-btn-quiet" style={{ flex: 1, color: 'var(--danger)' }} onClick={() => { update(() => DEFAULT_DATA); setArmed(false); }}>Ja, alles löschen</button>
+                <button className="s6-btn s6-btn-quiet" style={{ flex: 1 }} onClick={() => setArmed(false)}>Abbrechen</button>
               </div>
             </>
           ) : (
-            <button className="link small danger-text" onClick={() => setArmed(true)}>Alle Daten löschen …</button>
+            <button className="link danger" onClick={() => setArmed(true)}>Alle Daten löschen …</button>
           )}
         </div>
       </section>
-      <p className="muted small center">Kein Ersatz für ärztliche oder sportmedizinische Beratung.</p>
+      <p className="xs muted center">Kein Ersatz für ärztliche oder sportmedizinische Beratung.</p>
     </>
   );
 }

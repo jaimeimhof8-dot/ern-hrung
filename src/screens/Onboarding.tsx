@@ -35,30 +35,40 @@ export default function Onboarding({ update }: { update: Update }) {
     }));
   };
 
+  const field = (label: string, v: string, set: (s: string) => void, ph: string, unit?: string, mode: 'numeric' | 'decimal' = 'decimal') => (
+    <label className="f">
+      <span>{label}</span>
+      <div className="in"><input inputMode={mode} value={v} onChange={(e) => set(e.target.value)} placeholder={ph} />{unit && <span className="u">{unit}</span>}</div>
+    </label>
+  );
+
   return (
     <div className="app onboard">
-      <p className="kicker">Basel Sub-60 · Ernährung</p>
-      <h1>Abnehmen. Einfach tracken.</h1>
-      <p className="lead">
-        Die App berechnet deinen Kalorienbedarf, liest deinen Trainingsplan und zeigt dir jeden Tag, ob du abnimmst. Vier Angaben genügen.
-      </p>
-      <div className="pills" role="group" aria-label="Geschlecht">
-        <button className={`pill ${sex === 'm' ? 'on' : ''}`} onClick={() => setSex('m')}>Männlich</button>
-        <button className={`pill ${sex === 'w' ? 'on' : ''}`} onClick={() => setSex('w')}>Weiblich</button>
+      <div>
+        <div className="ov" style={{ color: 'var(--accent-ink)' }}>Basel Sub-60 · Ernährung</div>
+        <h1 className="ttl">Abnehmen.<br />Einfach tracken.</h1>
       </div>
-      <div className="grid2">
-        <label className="field"><span>Alter</span><input inputMode="numeric" value={age} onChange={(e) => setAge(e.target.value)} placeholder="30" /></label>
-        <label className="field"><span>Größe (cm)</span><input inputMode="numeric" value={height} onChange={(e) => setHeight(e.target.value)} placeholder="180" /></label>
-        <label className="field"><span>Gewicht (kg)</span><input inputMode="decimal" value={w} onChange={(e) => setW(e.target.value)} placeholder="80" /></label>
-        <label className="field"><span>Zielgewicht (kg)</span><input inputMode="decimal" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={weight ? String(weight - 3) : '77'} /></label>
+      <p className="muted body">Die App rechnet deinen Kalorienbedarf, liest deinen Trainingsplan und zeigt dir jeden Tag, ob du abnimmst.</p>
+      <div className="seg" role="group" aria-label="Geschlecht">
+        {(['m', 'w'] as Sex[]).map((x) => (
+          <button key={x} className={sex === x ? 'on' : ''} onClick={() => setSex(x)} style={{ textAlign: 'center', padding: '10px 6px', minHeight: 44, borderRadius: 999, font: '500 13px/18px var(--font-body)', color: sex === x ? 'var(--ink)' : 'var(--muted)', background: sex === x ? 'var(--card)' : 'none', boxShadow: sex === x ? 'var(--shadow-edge)' : 'none', fontWeight: sex === x ? 600 : 500 }}>
+            {x === 'm' ? 'Männlich' : 'Weiblich'}
+          </button>
+        ))}
+      </div>
+      <div className="cols2">
+        {field('Alter', age, setAge, '30', undefined, 'numeric')}
+        {field('Grösse', height, setHeight, '180', 'cm', 'numeric')}
+        {field('Gewicht', w, setW, '80', 'kg')}
+        {field('Zielgewicht', goal, setGoal, weight ? String(weight - 3) : '77', 'kg')}
       </div>
       {preview && (
-        <p className="preview">
-          Dein Gesamtumsatz: <strong>≈ {preview.tdee} kcal</strong> pro Tag
-        </p>
+        <div className="banner">
+          <div>Dein Gesamtumsatz: <b className="num">≈ {preview.tdee} kcal</b> pro Tag</div>
+        </div>
       )}
-      <button className="primary" disabled={!ok} onClick={start}>Los geht’s</button>
-      <p className="muted small">Alle Daten bleiben auf deinem Gerät. Körperfett, Aktivität und Tempo stellst du später im Profil ein.</p>
+      <button className="s6-btn s6-btn-primary w" disabled={!ok} onClick={start}>Los geht’s</button>
+      <p className="muted xs center">Körperfett, Aktivität und Tempo stellst du später im Profil ein. Alle Daten bleiben auf deinem Gerät.</p>
     </div>
   );
 }
