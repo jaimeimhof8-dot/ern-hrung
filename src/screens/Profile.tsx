@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DEFAULT_DATA,
   addDays,
@@ -13,6 +13,7 @@ import {
   type Settings,
 } from '../lib/engine';
 import { parseBackup, toCsv } from '../lib/storage';
+import { fetchGarminSteps, garminSignIn, garminSignOut, garminUser } from '../lib/garmin';
 import { Head, Icon, Metric, NumField, fmt, shortDate, type Notify, type Update } from '../ui';
 
 const ACTIVITY: [number, string][] = [
@@ -128,6 +129,18 @@ export default function Profile({ data, update, notify }: { data: Data; update: 
       </section>
 
       <section className="c">
+        <div className="lab">Protein pro kg Körpergewicht</div>
+        <div className="chips" role="group" aria-label="Protein">
+          {[1.6, 1.8, 2.0, 2.2].map((v) => (
+            <button key={v} className={`chip ${s.proteinPerKg === v ? 'on' : ''}`} onClick={() => set({ proteinPerKg: v })}>{fmt(v, 1)} g</button>
+          ))}
+        </div>
+        <p className="xs muted">Heute {Math.round(currentWeight(toISO(new Date()), data) * s.proteinPerKg)} g pro Tag. Schon ab 1,6 g/kg ist der Muskelerhalt im Defizit weitgehend gesichert, 2,2 g bringen nur noch wenig dazu. Was du weniger isst, wird automatisch durch Kohlenhydrate ersetzt.</p>
+      </section>
+
+      <GarminSteps update={update} notify={notify} />
+
+      <section className="c">
         <div className="lab">Schutzmodus</div>
         <div className="row between">
           <p className="body grow muted">
@@ -163,5 +176,51 @@ export default function Profile({ data, update, notify }: { data: Data; update: 
       </section>
       <p className="xs muted center">Kein Ersatz für ärztliche oder sportmedizinische Beratung.</p>
     </>
+  );
+}
+
+function GarminSteps({ update, notify }: { update: Update; notify: Notify }) {
+  const [user, setUser] = useState<string | null | undefined>(undefined);
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { garminUser().then(setUser); }, []);
+
+  const connect = async () => {
+    setBusy(true);
+    setErr('');
+    const e = await garminSignIn(email.trim(), pw);
+    if (e) setErr(e);
+    else {
+      setUser(await garminUser());
+      setPw('');
+      const st = await fetchGarminSteps().catch(() => null);
+      if (st) {
+        update((p) => ({ ...p, steps: { ...(p.steps ?? {}), ...st } }));
+        notify('Garmin verbunden, Schritte übernommen');
+      } else setErr('Angemeldet, aber Garmin liefert keine Schritte. In der HYROX-App unter Garmin verbinden.');
+    }
+    setBusy(false);
+  };
+
+  return (
+    <section className="c">
+      <div className="lab">Schritte von Garmin</div>
+      {user ? (
+        <>
+          <p className="sm">Verbunden als {user}. Die Schritte kommen automatisch beim Öffnen der App und danach alle 30 Minuten.</p>
+          <button className="link plain" onClick={async () => { await garminSignOut(); setUser(null); }}>Trennen</button>
+        </>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); if (email && pw) connect(); }} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <p className="xs muted">Einmal mit dem Login deiner HYROX-App anmelden, danach läuft es von selbst.</p>
+          <label className="f"><span>E-Mail</span><div className="in"><input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></div></label>
+          <label className="f"><span>Passwort</span><div className="in"><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} /></div></label>
+          {err && <p className="sm" role="alert">{err}</p>}
+          <button className="s6-btn s6-btn-primary w" type="submit" disabled={busy || !email || !pw}>{busy ? 'Verbinde …' : 'Mit Garmin verbinden'}</button>
+        </form>
+      )}
+    </section>
   );
 }

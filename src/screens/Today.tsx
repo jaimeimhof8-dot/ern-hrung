@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DAY_LABEL,
   addDays,
@@ -8,6 +8,8 @@ import {
   daysToRace,
   emptyLog,
   isProtected,
+  STEP_BASE,
+  stepAdjust,
   parseISO,
   protectAfterEnergy,
   toISO,
@@ -16,22 +18,15 @@ import {
   type Entry,
   type Feel,
   type Meal,
-  type Slot,
   type Template,
 } from '../lib/engine';
 import { MEALS, entryFromTemplate, totals, waterGoalMl } from '../lib/analytics';
-import { Head, Icon, Macro, Ring, WeighSheet, TYPE_CLASS, TYPE_COLOR, fmt, longDate, shortDate, type Notify, type Update } from '../ui';
+import { Head, Icon, num, Macro, Ring, WeighSheet, TYPE_CLASS, TYPE_COLOR, fmt, longDate, shortDate, type Notify, type Update } from '../ui';
 import PortionSheet from './PortionSheet';
 
 const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const mondayOf = (iso: string) => addDays(iso, -((parseISO(iso).getDay() + 6) % 7));
 const uid = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-
-/** Plan-Mahlzeit nach Uhrzeit einer Mahlzeitengruppe zuordnen. */
-function mealOfSlot(slot: Slot): Meal {
-  const h = parseInt(slot.time, 10);
-  return h < 11 ? 'fruehstueck' : h < 15 ? 'mittag' : h < 17 ? 'snack' : 'abend';
-}
 
 export default function Today({ date, setDate, data, update, onAdd, notify }: {
   date: string;
@@ -48,8 +43,6 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const today = toISO(new Date());
   const t = plan.trainingDay;
   const s = data.settings;
-  const [showPlan, setShowPlan] = useState(false);
-  const [showTrain, setShowTrain] = useState(false);
   const [portionId, setPortionId] = useState<string | null>(null);
   const [weighing, setWeighing] = useState(false);
 
@@ -105,31 +98,69 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const portionEntry = portionId ? entries.find((e) => e.id === portionId) : undefined;
   const portionTpl = portionEntry?.foodId?.startsWith('t:') ? data.templates.find((x) => x.id === portionEntry.foodId!.slice(2)) : undefined;
 
-  const togglePlanSlot = (i: number) => {
-    const slot = plan.slots[i];
-    const id = `plan-${i}`;
-    const on = entries.some((e) => e.id === id);
-    update((p) => {
-      const list = (p.diary[date] ?? []).filter((e) => e.id !== id);
-      if (!on) {
-        list.push({ id, meal: mealOfSlot(slot), name: `Plan: ${slot.label}`, kcal: slot.kcal, p: slot.p, c: slot.c, f: slot.f, amount: slot.time });
-      }
-      const meals = [...(p.logs[date]?.meals ?? emptyLog().meals)];
-      meals[i] = !on;
-      return { ...p, diary: { ...p.diary, [date]: list }, logs: { ...p.logs, [date]: { ...emptyLog(), ...p.logs[date], meals } } };
-    });
-  };
-
   const needsCheck = date === today && !Object.keys(data.weights).some((w) => w > addDays(today, -7));
   const water = data.water[date] ?? 0;
   const waterGoal = waterGoalMl(currentWeight(date, data));
   const addWater = (ml: number) => update((p) => ({ ...p, water: { ...p.water, [date]: Math.max(0, (p.water[date] ?? 0) + ml) } }));
 
+  const hour = new Date().getHours();
+  const expected = date === today ? Math.round((waterGoal * Math.min(1, Math.max(0, (hour - 7) / 14))) / 50) * 50 : 0;
+  const behind = Math.max(0, expected - water);
+  const [remind, setRemind] = useState(() => {
+    try { return localStorage.getItem('water-remind') === '1' && typeof Notification !== 'undefined' && Notification.permission === 'granted'; } catch { return false; }
+  });
+  useEffect(() => {
+    if (!remind) return;
+    const iv = window.setInterval(() => {
+      const h = new Date().getHours();
+      const have = data.water[today] ?? 0;
+      const want = waterGoal * Math.min(1, Math.max(0, (h - 7) / 14));
+      if (h >= 8 && h <= 21 && want - have > 300) new Notification('Zeit zu trinken', { body: `Du liegst ${Math.round((want - have) / 50) * 50} ml hinter dem Soll. Trink jetzt ein Glas.`, icon: '/icon-180.png' });
+    }, 45 * 60 * 1000);
+    return () => window.clearInterval(iv);
+  }, [remind, data.water, today, waterGoal]);
+  const toggleRemind = async () => {
+    if (remind) { setRemind(false); try { localStorage.setItem('water-remind', '0'); } catch { /* egal */ } return; }
+    if (typeof Notification === 'undefined') return notify('Dieser Browser kann keine Erinnerungen zeigen');
+    const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (perm !== 'granted') return notify('Benachrichtigungen sind blockiert');
+    setRemind(true);
+    try { localStorage.setItem('water-remind', '1'); } catch { /* egal */ }
+    notify('Erinnerung an: alle 45 Min., solange die App offen ist');
+  };
+
+  const stepsToday = data.steps?.[date];
+  const stepAdj = stepsToday != null ? stepAdjust(stepsToday, currentWeight(date, data)) : 0;
+  const [stepInput, setStepInput] = useState('');
+  const setSteps = (v: number | null) =>
+    update((p) => {
+      const next = { ...(p.steps ?? {}) };
+      if (v == null) delete next[date];
+      else next[date] = v;
+      return { ...p, steps: next };
+    });
+
+  // Protein: Schaffst du im Schnitt deutlich weniger als das Ziel, schlägt die App ein realistischeres vor
+  const proteinTip = useMemo(() => {
+    const days: number[] = [];
+    for (let i = 1; i <= 10 && days.length < 7; i++) {
+      const e = data.diary[addDays(today, -i)] ?? [];
+      const tot = totals(e);
+      if (e.length >= 3 && tot.kcal > 800) days.push(tot.p);
+    }
+    if (days.length < 5) return null;
+    const avg = days.reduce((a, b) => a + b, 0) / days.length;
+    const w = currentWeight(today, data);
+    const per = avg / w;
+    if (per >= s.proteinPerKg * 0.85 || s.proteinPerKg <= 1.6) return null;
+    const next = Math.max(1.6, Math.min(s.proteinPerKg - 0.2, Math.ceil((per + 0.05) * 5) / 5));
+    return { avg: Math.round(avg), per, next };
+  }, [data, today, s.proteinPerKg]);
+
   const protectedNow = isProtected(date, s);
   const calibRecent = !!s.calib && !!s.calibDate && date >= s.calibDate && date <= addDays(s.calibDate, 14);
   const color = TYPE_COLOR[plan.dayType];
   const mon = mondayOf(date);
-  const notes = plan.notes.filter((n) => !n.startsWith('Peak-Phase') && !n.startsWith('Schutzmodus aktiv'));
 
   return (
     <>
@@ -196,6 +227,51 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         )}
       </section>
 
+      <section className="c tight">
+        <div className="meal-h">
+          <span className="lab">Wasser</span>
+          <span className="xs muted">{fmt(water / 1000, 2)} / {fmt(waterGoal / 1000, 2)} l</span>
+        </div>
+        <div className="mb" style={{ '--c': 'var(--lauf)' } as React.CSSProperties}><div className="trk"><div className="fil" style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }} /></div></div>
+        <div className="chips">
+          <button className="chip" onClick={() => addWater(250)}><Icon n="drop" s />250 ml</button>
+          <button className="chip" onClick={() => addWater(500)}><Icon n="drop" s />500 ml</button>
+          <button className="chip" onClick={() => addWater(-250)} aria-label="250 ml abziehen">−250</button>
+        </div>
+        {behind >= 300 && <div className="tip"><Icon n="drop" s /><div>Du liegst ca. {behind} ml hinter dem Soll für diese Uhrzeit. Trink jetzt ein Glas.</div></div>}
+        <button className={`chip ${remind ? 'on' : ''}`} style={{ alignSelf: 'flex-start' }} onClick={toggleRemind} aria-pressed={remind}>{remind ? 'Erinnerung an' : 'Ans Trinken erinnern'}</button>
+      </section>
+
+      <section className="c tight">
+        <div className="meal-h">
+          <span className="lab">Schritte</span>
+          <span className="xs muted">{stepsToday != null ? `${stepsToday.toLocaleString('de-CH')} heute` : 'nicht eingetragen'}</span>
+        </div>
+        <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); const v = num(stepInput); if (v != null && v >= 0 && v <= 80000) { setSteps(Math.round(v)); setStepInput(''); } }}>
+          <label className="in focus-in" style={{ flex: 1 }}>
+            <input inputMode="numeric" placeholder="Schritte von deinem Handy" value={stepInput} onChange={(e) => setStepInput(e.target.value)} aria-label="Schritte" />
+          </label>
+          <button className="s6-btn s6-btn-quiet" type="submit" disabled={num(stepInput) == null}>Speichern</button>
+        </form>
+        {stepsToday != null && (
+          <div className="xs muted">
+            {stepAdj === 0
+              ? `Genau auf der Basis von ${STEP_BASE.toLocaleString('de-CH')} Schritten, dein Ziel bleibt.`
+              : `${stepAdj > 0 ? '+' : '−'}${Math.abs(stepAdj)} kcal auf dein Tagesziel: ${stepAdj > 0 ? 'mehr' : 'weniger'} Schritte als die Basis von ${STEP_BASE.toLocaleString('de-CH')}.`}{' '}
+            <button className="link" style={{ padding: 0 }} onClick={() => setSteps(null)}>Entfernen</button>
+          </div>
+        )}
+        {stepsToday == null && <div className="xs muted">Verbinde Garmin im Profil, dann kommen die Schritte von selbst.</div>}
+      </section>
+
+      {proteinTip && date === today && (
+        <section className="c tight">
+          <span className="lab">Protein anpassen?</span>
+          <div className="xs muted">Du kommst in den letzten Tagen im Schnitt auf {proteinTip.avg} g ({fmt(proteinTip.per, 1)} g/kg), dein Ziel liegt bei {fmt(s.proteinPerKg, 1)} g/kg. Ein Ziel von {fmt(proteinTip.next, 1)} g/kg ist realistischer und schützt deine Muskeln trotzdem.</div>
+          <button className="s6-btn s6-btn-quiet w" onClick={() => { update((p) => ({ ...p, settings: { ...p.settings, proteinPerKg: proteinTip.next } })); notify(`Protein-Ziel auf ${fmt(proteinTip.next, 1)} g/kg gesetzt`); }}>Auf {fmt(proteinTip.next, 1)} g/kg senken</button>
+        </section>
+      )}
+
       {needsCheck && <CheckIn data={data} update={update} date={date} onWeigh={() => setWeighing(true)} />}
 
       {entries.length === 0 && yesterday.length > 0 && (
@@ -255,43 +331,6 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         );
       })}
 
-      <section className="c tight">
-        <div className="meal-h">
-          <span className="lab">Wasser</span>
-          <span className="xs muted">{fmt(water / 1000, 2)} / {fmt(waterGoal / 1000, 2)} l</span>
-        </div>
-        <div className="mb" style={{ '--c': 'var(--lauf)' } as React.CSSProperties}><div className="trk"><div className="fil" style={{ width: `${Math.min(100, (water / waterGoal) * 100)}%` }} /></div></div>
-        <div className="chips">
-          <button className="chip" onClick={() => addWater(250)}><Icon n="drop" s />250 ml</button>
-          <button className="chip" onClick={() => addWater(500)}><Icon n="drop" s />500 ml</button>
-          <button className="chip" onClick={() => addWater(-250)} aria-label="250 ml abziehen">−250</button>
-        </div>
-      </section>
-
-      <section className="c tight">
-        <button className="meal-h" style={{ minHeight: 28 }} onClick={() => setShowPlan(!showPlan)} aria-expanded={showPlan}>
-          <span className="lab">Mahlzeitenplan zum Abhaken</span>
-          <span className="muted" style={{ transform: showPlan ? 'rotate(90deg)' : 'none' }}><Icon n="r" s /></span>
-        </button>
-        {showPlan && (
-          <>
-            <div className="xs muted">Tippen übernimmt die Mahlzeit samt Nährwerten ins Tagebuch.</div>
-            {plan.slots.map((sl, i) => (
-              <button key={i} className="ent" style={{ alignItems: 'flex-start', opacity: log.meals[i] ? 0.6 : 1, width: '100%' }} onClick={() => togglePlanSlot(i)} aria-pressed={log.meals[i]}>
-                <span style={{ flex: 'none', width: 28, height: 28, borderRadius: '50%', display: 'grid', placeItems: 'center', background: log.meals[i] ? 'var(--accent)' : 'transparent', color: 'var(--on-accent)', boxShadow: log.meals[i] ? 'none' : 'inset 0 0 0 2px var(--muted)' }}>
-                  {log.meals[i] && <Icon n="check" s />}
-                </span>
-                <span className="t">
-                  <span className="row between"><b className="strong">{sl.time} · {sl.label}</b><span className="xs muted">{sl.kcal} kcal</span></span>
-                  <span className="xs muted">{sl.p} g Protein{sl.c > 0 ? ` · ${sl.c} g Carbs` : ''}{sl.f > 0 ? ` · ${sl.f} g Fett` : ''}</span>
-                  <span className="xs" style={{ marginTop: 4 }}>{sl.hint}</span>
-                </span>
-              </button>
-            ))}
-          </>
-        )}
-      </section>
-
       {plan.dayType === 'HIGH_PERFORMANCE' && t && (
         <section className="c tight">
           <span className="lab">Wie war das Training?</span>
@@ -301,20 +340,6 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
             ))}
           </div>
           <div className="xs muted">Ein Tipp reicht. Bei zwei zähen Tagen in Folge gibt die App mehr Kohlenhydrate.</div>
-        </section>
-      )}
-
-      {notes.length > 0 && (
-        <section className="c tight">{notes.map((n) => <p className="sm" key={n}>{n}</p>)}</section>
-      )}
-
-      {t && t.k !== 'rest' && t.i.length > 0 && (
-        <section className="c tight">
-          <button className="meal-h" style={{ minHeight: 28 }} onClick={() => setShowTrain(!showTrain)} aria-expanded={showTrain}>
-            <span className="lab">Training heute</span>
-            <span className="muted" style={{ transform: showTrain ? 'rotate(90deg)' : 'none' }}><Icon n="r" s /></span>
-          </button>
-          {showTrain && <ul className="sm" style={{ margin: 0, paddingLeft: 18 }}>{t.i.map((x) => <li key={x}>{x}</li>)}</ul>}
         </section>
       )}
 

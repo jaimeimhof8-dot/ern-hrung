@@ -2,9 +2,10 @@ import { useMemo, useState } from 'react';
 import type { Data, Entry, Food, Meal, Template } from '../lib/engine';
 import { MEALS, entryFromFood, entryFromTemplate, makeTemplate, totals } from '../lib/analytics';
 import { BUILTIN_FOODS, precisionOf, searchFoods } from '../lib/foods';
+import Scan from './Scan';
 import { Icon, Sheet, num, type Notify, type Update } from '../ui';
 
-type Mode = 'suche' | 'mahlzeiten' | 'schnell' | 'eigen';
+type Mode = 'suche' | 'scan' | 'mahlzeiten' | 'schnell' | 'eigen';
 
 interface Props {
   meal: Meal;
@@ -41,6 +42,21 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
     notify(`«${e.name}» hinzugefügt`, [
       { label: 'Rückgängig', run: () => update((p) => ({ ...p, diary: { ...p.diary, [date]: (p.diary[date] ?? []).filter((x) => x.id !== e.id) } })) },
     ]);
+  };
+
+  const addEntries = (list: Entry[]) => {
+    update((p) => ({ ...p, diary: { ...p.diary, [date]: [...(p.diary[date] ?? []), ...list] } }));
+    onClose();
+    notify(`${list.length} ${list.length === 1 ? 'Eintrag' : 'Einträge'} hinzugefügt`, [
+      { label: 'Rückgängig', run: () => update((p) => ({ ...p, diary: { ...p.diary, [date]: (p.diary[date] ?? []).filter((x) => !list.some((l) => l.id === x.id)) } })) },
+    ]);
+  };
+
+  // Gescanntes Produkt merken, damit es später in der Suche steht
+  const pickScanned = (f: Food) => {
+    update((p) => (p.customFoods.some((x) => x.id === f.id) ? p : { ...p, customFoods: [f, ...p.customFoods] }));
+    setPicked(f);
+    setMode('suche');
   };
 
   const toggleFav = (id: string) =>
@@ -146,6 +162,7 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
             {(
               [
                 ['suche', 'Suchen'],
+                ['scan', 'Scan'],
                 ['mahlzeiten', 'Mahlzeiten'],
                 ['schnell', 'Schnell'],
                 ['eigen', 'Neu'],
@@ -166,6 +183,8 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
               }}
             />
           )}
+
+          {mode === 'scan' && <Scan meal={meal} onFood={pickScanned} onEntries={addEntries} />}
 
           {mode === 'mahlzeiten' && (
             <>

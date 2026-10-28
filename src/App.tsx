@@ -3,6 +3,7 @@ import { toISO, type Meal } from './lib/engine';
 import { Icon, mealByClock, type IconName, type Notify, type ToastAction } from './ui';
 import AddFood from './screens/AddFood';
 import { useData } from './lib/storage';
+import { fetchGarminSteps, garminUser } from './lib/garmin';
 import Onboarding from './screens/Onboarding';
 import Today from './screens/Today';
 import Week from './screens/Week';
@@ -37,6 +38,41 @@ export default function App() {
     timer.current = window.setTimeout(() => setToast(null), actions.length ? 6000 : 3500);
   }, []);
   useEffect(() => () => window.clearTimeout(timer.current), []);
+
+  // Automatische Schritte: ein iPhone-Kurzbefehl öffnet die App mit ?steps=8234 (optional &date=JJJJ-MM-TT)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const n = Math.round(Number(q.get('steps')));
+    if (!q.has('steps')) return;
+    const d = q.get('date') && /^d{4}-d{2}-d{2}$/.test(q.get('date')!) ? q.get('date')! : toISO(new Date());
+    if (n >= 0 && n <= 80000) {
+      update((p) => ({ ...p, steps: { ...(p.steps ?? {}), [d]: n } }));
+      notify(`${n.toLocaleString('de-CH')} Schritte übernommen`);
+    }
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [update, notify]);
+
+  // Garmin: Schritte beim Öffnen und danach alle 30 Minuten holen (nur wenn im Profil verbunden)
+  useEffect(() => {
+    let alive = true;
+    const pull = async () => {
+      if (document.visibilityState !== 'visible' || !(await garminUser())) return;
+      const st = await fetchGarminSteps().catch(() => null);
+      if (!alive || !st) return;
+      update((p) => {
+        const cur = p.steps ?? {};
+        return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
+      });
+    };
+    pull();
+    const iv = window.setInterval(pull, 30 * 60 * 1000);
+    document.addEventListener('visibilitychange', pull);
+    return () => {
+      alive = false;
+      window.clearInterval(iv);
+      document.removeEventListener('visibilitychange', pull);
+    };
+  }, [update]);
 
   if (!data.settings.onboarded) return <Onboarding update={update} />;
 

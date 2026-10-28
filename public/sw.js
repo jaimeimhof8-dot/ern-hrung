@@ -1,5 +1,5 @@
 // Offline-Cache: Netz zuerst, bei Ausfall der letzte gespeicherte Stand.
-const CACHE = 'sub60-ernaehrung-v1';
+const CACHE = 'sub60-ernaehrung-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {

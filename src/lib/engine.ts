@@ -1,4 +1,5 @@
-import { builtinPlan, weekInfo } from '../training/plan-store.js';
+import { weekInfo } from '../training/plan-store.js';
+import PLAN_V13C from '../training/plan-v13c.json';
 import { idxFromDate, RACE } from '../training/dates.js';
 import { isEasyRun } from '../training/util.js';
 
@@ -105,6 +106,8 @@ export interface Data {
   energy: Record<string, Energy>;
   diary: Record<string, Entry[]>;
   water: Record<string, number>;
+  /** Schritte pro Tag (von Hand eingetragen) */
+  steps: Record<string, number>;
   customFoods: Food[];
   favorites: string[];
   templates: Template[];
@@ -173,12 +176,13 @@ export const DEFAULT_DATA: Data = {
   energy: {},
   diary: {},
   water: {},
+  steps: {},
   customFoods: [],
   favorites: [],
   templates: [],
 };
 
-const PLAN = builtinPlan() as unknown as { days: Record<number, PlanDay> };
+const PLAN = PLAN_V13C as unknown as { days: Record<number, PlanDay> };
 export const RACE_IDX = idxFromDate(RACE) as number;
 const PEAK_WEEK = 13;
 const EA_FLOOR = 30;
@@ -257,6 +261,14 @@ export function estimateTdee(weightKg: number, bf: number): number {
 export function currentWeight(date: string, d: Data): number {
   const days = Object.keys(d.weights).filter((x) => x <= date).sort();
   return days.length ? d.weights[days[days.length - 1]] : d.settings.weightKg;
+}
+
+/** Schritte, die schon im Aktivitätsfaktor 1,55 stecken. Darüber gibt es Kalorien dazu, darunter gehen welche weg. */
+export const STEP_BASE = 7500;
+/** Kalorien durch Schritte relativ zur Basis: ca. 0,0006 kcal pro Schritt und kg Körpergewicht, begrenzt auf −300 … +600. */
+export function stepAdjust(steps: number, weightKg: number): number {
+  const raw = (steps - STEP_BASE) * 0.0006 * weightKg;
+  return Math.round(Math.max(-300, Math.min(600, raw)) / 10) * 10;
 }
 
 // ---------- Tagestyp aus dem Trainingsplan ----------
@@ -478,6 +490,15 @@ export function computeDay(date: string, d: Data): DayPlan {
   if (!outside && glycogenBoost(date, d)) {
     kcal += 300;
     notes.push('+300 kcal: zwei zähe Intensivtage – dein Glykogen muss nachgefüllt werden.');
+  }
+
+  const steps = d.steps?.[date];
+  if (steps != null && !outside) {
+    const adj = stepAdjust(steps, weight);
+    if (adj !== 0) {
+      kcal += adj;
+      notes.push(`${adj > 0 ? '+' : '−'}${Math.abs(adj)} kcal durch ${steps.toLocaleString('de-CH')} Schritte (Basis ${STEP_BASE.toLocaleString('de-CH')}).`);
+    }
   }
 
   const eee = EEE[type];

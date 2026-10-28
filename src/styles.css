@@ -123,3 +123,9 @@ button.food { width: 100%; text-align: left; }
 .sheet .chips.free { flex-wrap: wrap; }
 .sheet .chips.free .chip { flex: none; padding: 0 14px; font-size: 13px; }
 .lg.dash { width: 14px; height: 0; border-radius: 0; background: none; border-top: 1.5px dashed var(--muted); }
+
+/* Nichts darf breiter werden als der Bildschirm (Grid-Kinder mit Eingabefeldern) */
+html, body { overflow-x: hidden; }
+.app, main, .c, .f, .in, .cols2 > *, .cols3 > *, .compare > *, .s6-grid > * { min-width: 0; max-width: 100%; }
+.in select { width: 100%; text-overflow: ellipsis; }
+.in input { width: 100%; }
