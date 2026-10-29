@@ -12,7 +12,7 @@ import {
   type Sex,
   type Settings,
 } from '../lib/engine';
-import { parseBackup, toCsv } from '../lib/storage';
+import { parseBackup, parseWeightCsv, toCsv } from '../lib/storage';
 import { fetchGarminSteps, garminSignIn, garminSignOut, garminUser } from '../lib/garmin';
 import { Head, Icon, Metric, NumField, fmt, shortDate, type Notify, type Update } from '../ui';
 
@@ -64,6 +64,13 @@ export default function Profile({ data, update, notify }: { data: Data; update: 
       update(() => d);
       notify('Backup geladen');
     } else notify('Datei konnte nicht gelesen werden');
+  };
+  const importWeights = async (f: File) => {
+    const w = parseWeightCsv(await f.text());
+    if (!w) return notify('Keine Gewichte in der Datei gefunden');
+    const fresh = Object.keys(w).filter((d) => data.weights[d] === undefined);
+    update((p) => ({ ...p, weights: { ...Object.fromEntries(Object.entries(w).filter(([d]) => p.weights[d] === undefined)), ...p.weights } }));
+    notify(`${fresh.length} Gewichte importiert`);
   };
   const save = (name: string, text: string, type: string) => {
     download(name, text, type);
@@ -158,6 +165,10 @@ export default function Profile({ data, update, notify }: { data: Data; update: 
         <label className="s6-btn s6-btn-quiet w">
           Backup laden
           <input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && importData(e.target.files[0])} />
+        </label>
+        <label className="s6-btn s6-btn-quiet w">
+          Gewichte importieren (CSV)
+          <input type="file" accept=".csv,text/csv" hidden onChange={(e) => e.target.files?.[0] && importWeights(e.target.files[0])} />
         </label>
         <p className="xs muted">Alles liegt nur auf diesem Gerät. Der Trainingsplan ist fest eingebaut (Stand 18.09.2026).</p>
         <div style={{ borderTop: '1px solid var(--line)', paddingTop: 10, display: 'flex', flexDirection: 'column', gap: 10 }}>
