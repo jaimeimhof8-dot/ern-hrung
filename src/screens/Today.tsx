@@ -301,8 +301,10 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
               const body = (
                 <>
                   <span className="strong">{e.name}</span>
-                  {e.est ? (
+                  {e.est && !(e.p || e.c || e.f) ? (
                     <span className="xs est">≈ geschätzt · nur Kalorien</span>
+                  ) : e.est ? (
+                    <span className="xs est">≈ geschätzt · {e.amount ? `${e.amount} · ` : ''}{e.p} P · {e.c} C · {e.f} F</span>
                   ) : (
                     <span className="xs muted">{e.amount ? `${e.amount} · ` : ''}{e.p} P · {e.c} C · {e.f} F</span>
                   )}

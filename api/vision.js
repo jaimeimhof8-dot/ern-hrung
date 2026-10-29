@@ -7,7 +7,11 @@ const PROMPTS = {
   etikett:
     'Lies die Nährwerttabelle auf dem Foto. Antworte NUR mit JSON: {"name":string,"kcal":number,"p":number,"c":number,"f":number,"serving_g":number|null}. Werte pro 100 g bzw. 100 ml (p=Eiweiss, c=Kohlenhydrate, f=Fett, kcal=Energie in kcal). Rechne um, falls die Tabelle pro Portion angegeben ist. Ist keine Tabelle lesbar: {"kcal":null}.',
   teller:
-    'Das Foto zeigt eine Mahlzeit. Liste jeden erkennbaren Bestandteil auf und schätze Gewicht und Nährwerte des Gezeigten. Antworte NUR mit JSON: {"items":[{"name":string (deutsch),"g":number,"kcal":number,"p":number,"c":number,"f":number}]}. Ist kein Essen zu sehen: {"items":[]}.',
+    'Das Foto zeigt eine Mahlzeit. Liste jeden erkennbaren Bestandteil einzeln auf und schätze das Gewicht des Gezeigten (Zustand wie serviert, gekocht bzw. roh passend zum Aussehen). ' +
+    'Genauigkeitsregeln: Nutze Referenzgrössen im Bild (Teller ca. 26 cm, Besteck, Hand, Verpackung), um Gramm zu bestimmen. Schätze eher knapp als grosszügig: Bei Unsicherheit nimm den kleineren plausiblen Wert, ein kleiner Teller oder eine Portion mit viel Leerfläche ist wenig Essen. ' +
+    'Rechne kein Öl, keine Butter, keine Sauce und kein Dressing ein, ausser es ist sichtbar (glänzend, Pfütze, erkennbare Sauce); dann als eigenen Posten mit realistischer Menge (z. B. 5 bis 10 g Öl). Erfinde keine Bestandteile, die nicht erkennbar sind. ' +
+    'Nährwerte aus üblichen Tabellenwerten pro 100 g des jeweiligen Lebensmittels (kcal muss zu 4·p + 4·c + 9·f passen, Abweichung höchstens 10 %). Getränke nur, wenn sie kalorienhaltig sind. ' +
+    'Antworte NUR mit JSON: {"items":[{"name":string (deutsch),"g":number,"kcal":number,"p":number,"c":number,"f":number}]}. Ist kein Essen zu sehen: {"items":[]}.',
 };
 
 export default async function handler(req, res) {
@@ -38,7 +42,15 @@ export default async function handler(req, res) {
     const text = (j.content ?? []).find((b) => b.type === 'text')?.text ?? '';
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return send(502, { error: 'Antwort nicht lesbar' });
-    send(200, JSON.parse(m[0]));
+    const out = JSON.parse(m[0]);
+    if (kind === 'teller' && Array.isArray(out.items)) {
+      // kcal und Makros müssen zusammenpassen: bei mehr als 10 % Abweichung gilt der Makro-Wert
+      out.items = out.items.map((x) => {
+        const calc = Math.round(4 * (x.p || 0) + 4 * (x.c || 0) + 9 * (x.f || 0));
+        return calc > 0 && Math.abs(calc - x.kcal) > 0.1 * calc ? { ...x, kcal: calc } : x;
+      });
+    }
+    send(200, out);
   } catch {
     send(500, { error: 'Analyse fehlgeschlagen' });
   }
