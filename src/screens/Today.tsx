@@ -29,6 +29,8 @@ import {
 import { MEALS, entryFromTemplate, totals, waterGoalMl } from '../lib/analytics';
 import { Head, Icon, num, Macro, Ring, WeighSheet, TYPE_CLASS, TYPE_COLOR, fmt, longDate, shortDate, type Notify, type Update } from '../ui';
 import PortionSheet from './PortionSheet';
+import { gateEnabled, pushWanted, setGateEnabled, setPushWanted, waterExpected } from '../lib/water';
+import { waterPushOff, waterPushOn, waterPushTest, waterSync, type PushResult } from '../lib/garmin';
 
 const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const mondayOf = (iso: string) => addDays(iso, -((parseISO(iso).getDay() + 6) % 7));
@@ -157,7 +159,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const addWater = (ml: number) => update((p) => ({ ...p, water: { ...p.water, [date]: Math.max(0, (p.water[date] ?? 0) + ml) } }));
 
   const hour = new Date().getHours();
-  const expected = date === today ? Math.round((waterGoal * Math.min(1, Math.max(0, (hour - 7) / 14))) / 50) * 50 : 0;
+  const expected = date === today ? waterExpected(waterGoal, hour) : 0;
   const behind = Math.max(0, expected - water);
   const [remind, setRemind] = useState(() => {
     try { return localStorage.getItem('water-remind') === '1' && typeof Notification !== 'undefined' && Notification.permission === 'granted'; } catch { return false; }
@@ -182,9 +184,54 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
     notify('Erinnerung an: alle 45 Min., solange die App offen ist');
   };
 
+  const [gate, setGate] = useState(gateEnabled());
+  const [push, setPush] = useState(pushWanted());
+  const toggleGate = () => {
+    setGate(!gate);
+    setGateEnabled(!gate);
+    notify(!gate ? 'Trink-Pflicht an: ein Vollbild erscheint, wenn du hinten liegst' : 'Trink-Pflicht aus');
+  };
+  const togglePush = async () => {
+    if (push) {
+      setPush(false);
+      setPushWanted(false);
+      await waterPushOff();
+      notify('Push-Erinnerung aus');
+      return;
+    }
+    const r = await waterPushOn();
+    const msg: Record<Exclude<PushResult, 'on'>, string> = {
+      denied: 'Benachrichtigungen sind blockiert. Gib sie in den Handy-Einstellungen für die App frei.',
+      unsupported: 'Dieses Gerät kann keine Push-Nachrichten. Auf dem iPhone muss die App zum Home-Bildschirm hinzugefügt sein.',
+      login: 'Bitte zuerst im Profil anmelden (Garmin-Login).',
+      error: 'Anmeldung für Push fehlgeschlagen. Ist die Funktion «water» bei Supabase eingerichtet?',
+    };
+    if (r !== 'on') return notify(msg[r]);
+    setPush(true);
+    setPushWanted(true);
+    await waterSync(today, data.water[today] ?? 0, waterGoal);
+    notify('Push-Erinnerung an: alle 30 Min. geprüft, 8 bis 21 Uhr', [{ label: 'Test senden', run: async () => notify((await waterPushTest()) ? 'Test gesendet' : 'Test fehlgeschlagen. Ist die Funktion «water» ausgespielt?') }]);
+  };
+
   const stepsToday = data.steps?.[date];
   const stepAdj = stepsToday != null ? stepAdjust(stepsToday, currentWeight(date, data)) : 0;
   const [stepInput, setStepInput] = useState('');
+  const [exOpen, setExOpen] = useState(() => {
+    try {
+      return localStorage.getItem('s60.extra.open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleEx = () => {
+    const v = !exOpen;
+    setExOpen(v);
+    try {
+      localStorage.setItem('s60.extra.open', v ? '1' : '0');
+    } catch {
+      /* ignorieren */
+    }
+  };
   const [exSport, setExSport] = useState<ExtraSport>('rad');
   const [exLevel, setExLevel] = useState<ExtraLevel>('mittel');
   const [exMin, setExMin] = useState('');
@@ -321,36 +368,59 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
           <button className="chip" onClick={() => addWater(-250)} aria-label="250 ml abziehen">−250</button>
         </div>
         {behind >= 300 && <div className="tip"><Icon n="drop" s /><div>Du liegst ca. {behind} ml hinter dem Soll für diese Uhrzeit. Trink jetzt ein Glas.</div></div>}
-        <button className={`chip ${remind ? 'on' : ''}`} style={{ alignSelf: 'flex-start' }} onClick={toggleRemind} aria-pressed={remind}>{remind ? 'Erinnerung an' : 'Ans Trinken erinnern'}</button>
+        <div className="chips" role="group" aria-label="Trink-Erinnerungen">
+          <button className={`chip ${gate ? 'on' : ''}`} onClick={toggleGate} aria-pressed={gate}>Trink-Pflicht</button>
+          <button className={`chip ${push ? 'on' : ''}`} onClick={togglePush} aria-pressed={push}>Push aufs Handy</button>
+          <button className={`chip ${remind ? 'on' : ''}`} onClick={toggleRemind} aria-pressed={remind}>{remind ? 'App-Hinweis an' : 'App-Hinweis'}</button>
+        </div>
+        <div className="xs muted">Trink-Pflicht: ein Vollbild erscheint beim Öffnen, wenn du mehr als 300 ml hinter dem Soll liegst. Push: Erinnerung aufs Handy, auch bei geschlossener App.</div>
       </section>
 
       <section className="c tight">
         <div className="meal-h">
           <span className="lab">Schritte</span>
-          <span className="xs muted">{stepsToday != null ? `${stepsToday.toLocaleString('de-CH')} heute` : 'nicht eingetragen'}</span>
+          <span className="xs muted">{stepsToday != null ? `${date === today ? 'heute' : 'an diesem Tag'}` : 'noch keine'}</span>
         </div>
+        <div className="row" style={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <span className="strong" style={{ fontSize: 28, lineHeight: '34px' }}>{stepsToday != null ? stepsToday.toLocaleString('de-CH') : '–'}</span>
+          <span className="xs muted">Basis {STEP_BASE.toLocaleString('de-CH')}</span>
+        </div>
+        <div className="mb" style={{ '--c': stepAdj < 0 ? 'var(--danger)' : 'var(--accent)' } as React.CSSProperties}>
+          <span className="trk"><span className="fil" style={{ width: `${Math.min(100, ((stepsToday ?? 0) / STEP_BASE) * 100)}%`, display: 'block' }} /></span>
+        </div>
+        {stepsToday != null ? (
+          <>
+            <div className="tip soft">
+              <div>
+                <b style={{ color: 'var(--ink)' }}>{stepAdj === 0 ? 'Kein Einfluss auf dein Ziel' : `${stepAdj > 0 ? '+' : '−'}${Math.abs(stepAdj)} kcal auf dein Tagesziel`}</b>
+                <br />
+                {stepAdj === 0
+                  ? `Du liegst genau auf der Basis von ${STEP_BASE.toLocaleString('de-CH')} Schritten.`
+                  : `${Math.abs(stepsToday - STEP_BASE).toLocaleString('de-CH')} Schritte ${stepAdj > 0 ? 'über' : 'unter'} der Basis. Dein Tagesziel von ${plan.kcal} kcal enthält das schon.`}
+              </div>
+            </div>
+            <div className="xs muted">
+              Im Ziel sind {STEP_BASE.toLocaleString('de-CH')} Schritte eingerechnet. Darüber gibt es ca. 0,0006 kcal pro Schritt und kg Körpergewicht dazu (höchstens +600), darunter gehen welche weg (höchstens −300).{' '}
+              {data.steps?.[date] != null && <button className="link" style={{ padding: 0 }} onClick={() => setSteps(null)}>Wert entfernen</button>}
+            </div>
+          </>
+        ) : (
+          <div className="xs muted">Noch keine Schritte für diesen Tag. Sie kommen von Garmin (Profil verbunden), sobald die App abgerufen hat, oder du trägst sie unten von Hand ein. Ohne Wert rechnet das Ziel mit der Basis von {STEP_BASE.toLocaleString('de-CH')}.</div>
+        )}
         <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); const v = num(stepInput); if (v != null && v >= 0 && v <= 80000) { setSteps(Math.round(v)); setStepInput(''); } }}>
           <label className="in focus-in" style={{ flex: 1 }}>
-            <input inputMode="numeric" placeholder="Schritte von deinem Handy" value={stepInput} onChange={(e) => setStepInput(e.target.value)} aria-label="Schritte" />
+            <input inputMode="numeric" placeholder="Von Hand eintragen" value={stepInput} onChange={(e) => setStepInput(e.target.value)} aria-label="Schritte von Hand" />
           </label>
           <button className="s6-btn s6-btn-quiet" type="submit" disabled={num(stepInput) == null}>Speichern</button>
         </form>
-        {stepsToday != null && (
-          <div className="xs muted">
-            {stepAdj === 0
-              ? `Genau auf der Basis von ${STEP_BASE.toLocaleString('de-CH')} Schritten, dein Ziel bleibt.`
-              : `${stepAdj > 0 ? '+' : '−'}${Math.abs(stepAdj)} kcal auf dein Tagesziel: ${stepAdj > 0 ? 'mehr' : 'weniger'} Schritte als die Basis von ${STEP_BASE.toLocaleString('de-CH')}.`}{' '}
-            <button className="link" style={{ padding: 0 }} onClick={() => setSteps(null)}>Entfernen</button>
-          </div>
-        )}
-        {stepsToday == null && <div className="xs muted">Verbinde Garmin im Profil, dann kommen die Schritte von selbst.</div>}
       </section>
 
       <section className="c tight">
-        <div className="meal-h">
-          <span className="lab">Zusatz-Einheit</span>
-          <span className="xs muted">{extras.length ? `${extras.length} ${date === today ? 'heute' : 'an diesem Tag'}` : 'ausser Plan'}</span>
-        </div>
+        <button className="meal-h" style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, padding: 0, color: 'inherit' }} onClick={toggleEx} aria-expanded={exOpen} aria-controls="extra-body">
+          <span className="lab">Zusatz-Einheit {exOpen ? '▾' : '▸'}</span>
+          <span className="xs muted">{extras.length ? `${extras.length} ${date === today ? 'heute' : 'an diesem Tag'} · +${Math.round(extras.reduce((a, e) => a + e.kcal, 0) * EXTRA_BACK / 10) * 10} kcal` : 'ausser Plan'}</span>
+        </button>
+        {exOpen && (<div id="extra-body" style={{ display: 'contents' }}>
         {extras.map((e) => (
           <div className="ent" key={e.id}>
             <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min{e.src === 'garmin' ? ' · Garmin' : ''}</span><span className="xs muted">{e.src === 'garmin' && e.gkcal ? `Garmin ${e.gkcal} − Grundumsatz ${e.rest ?? 0} = ca. ${e.kcal} kcal, davon ${Math.round(EXTRA_BACK * 100)} %` : `${e.src === 'garmin' ? 'nicht im Plan, geschätzt' : e.level} · ca. ${e.kcal} kcal`}</span></div>
@@ -378,6 +448,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         <div className="xs muted">
           {exPreview ? `Schätzung ca. ${exPreview} kcal (±25 %), davon ${Math.round(exPreview * EXTRA_BACK / 10) * 10} kcal auf dein Tagesziel.` : `Von der Schätzung kommen ${Math.round(EXTRA_BACK * 100)} % aufs Tagesziel, der Rest schützt dein Defizit.`}
         </div>
+        </div>)}
       </section>
 
       {proteinTip && date === today && (

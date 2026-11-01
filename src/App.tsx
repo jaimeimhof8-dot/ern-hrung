@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { addDays, garminExtrasForDay, toISO, type Extra, type Meal } from './lib/engine';
+import { addDays, currentWeight, garminExtrasForDay, toISO, type Data, type Extra, type Meal } from './lib/engine';
+import { waterGoalMl } from './lib/analytics';
+import { GATE_FROM, GATE_MIN_BEHIND, GATE_TO, gateEnabled, gateSnoozedUntil, pushWanted, snoozeGate, waterExpected } from './lib/water';
 import { Icon, mealByClock, type IconName, type Notify, type ToastAction } from './ui';
 import AddFood from './screens/AddFood';
 import { useData } from './lib/storage';
-import { fetchGarminActs, fetchGarminSteps, fetchPlanOverrides, garminUser } from './lib/garmin';
+import { fetchGarminActs, fetchGarminSteps, fetchPlanOverrides, garminUser, waterSync } from './lib/garmin';
 import Onboarding from './screens/Onboarding';
 import Today from './screens/Today';
 import Week from './screens/Week';
@@ -22,6 +24,44 @@ const TABS: [Tab, string, IconName][] = [
 interface ToastState {
   text: string;
   actions: ToastAction[];
+}
+
+/** Trink-Pflicht: Liegst du für die Uhrzeit mehr als 300 ml hinter dem Soll, deckt ein Vollbild die App zu, bis du trinkst (oder 45 Min. wartest). */
+function WaterGate({ data, update }: { data: Data; update: (f: (p: Data) => Data) => void }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setTick((t) => t + 1);
+    const iv = window.setInterval(bump, 60 * 1000);
+    document.addEventListener('visibilitychange', bump);
+    return () => {
+      window.clearInterval(iv);
+      document.removeEventListener('visibilitychange', bump);
+    };
+  }, []);
+  const now = new Date();
+  const today = toISO(now);
+  const hour = now.getHours();
+  const goal = waterGoalMl(currentWeight(today, data));
+  const ml = data.water[today] ?? 0;
+  const behind = Math.max(0, waterExpected(goal, hour) - ml);
+  if (!gateEnabled() || document.visibilityState !== 'visible' || hour < GATE_FROM || hour >= GATE_TO || behind < GATE_MIN_BEHIND || Date.now() < gateSnoozedUntil()) return null;
+  const drink = (add: number) => {
+    update((p) => ({ ...p, water: { ...p.water, [today]: (p.water[today] ?? 0) + add } }));
+    snoozeGate(); // nach dem Trinken 45 Minuten Ruhe, auch wenn der Rückstand noch nicht ganz aufgeholt ist
+    setTick((t) => t + 1);
+  };
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby="wg-t" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'var(--bg, #0b0b10)', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 16, padding: 24 }}>
+      <Icon n="drop" />
+      <h2 id="wg-t" style={{ margin: 0 }}>Zeit zu trinken</h2>
+      <p className="sm" style={{ margin: 0 }}>
+        Dir fehlen ca. <b>{behind} ml</b> für diese Uhrzeit ({ml} von {goal} ml). Trink jetzt ein Glas Wasser und bestätige es.
+      </p>
+      <button className="s6-btn s6-btn-primary w" onClick={() => drink(250)}>Ich habe 250 ml getrunken</button>
+      <button className="s6-btn s6-btn-quiet w" onClick={() => drink(500)}>Ich habe 500 ml getrunken</button>
+      <button className="link plain" onClick={() => { snoozeGate(); setTick((t) => t + 1); }}>In 45 Minuten wieder erinnern</button>
+    </div>
+  );
 }
 
 export default function App() {
@@ -44,7 +84,7 @@ export default function App() {
     const q = new URLSearchParams(window.location.search);
     const n = Math.round(Number(q.get('steps')));
     if (!q.has('steps')) return;
-    const d = q.get('date') && /^d{4}-d{2}-d{2}$/.test(q.get('date')!) ? q.get('date')! : toISO(new Date());
+    const d = q.get('date') && /^\d{4}-\d{2}-\d{2}$/.test(q.get('date')!) ? q.get('date')! : toISO(new Date());
     if (n >= 0 && n <= 80000) {
       update((p) => ({ ...p, steps: { ...(p.steps ?? {}), [d]: n } }));
       notify(`${n.toLocaleString('de-CH')} Schritte übernommen`);
@@ -58,11 +98,14 @@ export default function App() {
     const pull = async () => {
       if (document.visibilityState !== 'visible' || !(await garminUser())) return;
       const st = await fetchGarminSteps().catch(() => null);
-      if (!alive || !st) return;
-      update((p) => {
-        const cur = p.steps ?? {};
-        return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
-      });
+      if (!alive) return;
+      // Ein Fehler bei den Schritten darf Plan und Aktivitäten nicht blockieren
+      if (st) {
+        update((p) => {
+          const cur = p.steps ?? {};
+          return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
+        });
+      }
       // Plan der Trainings-App (Tausch, Anpassung, Ausfall): damit gilt hier dasselbe Training wie dort
       const ov = await fetchPlanOverrides().catch(() => null);
       if (!alive) return;
@@ -75,8 +118,16 @@ export default function App() {
         /* gesperrt: einfach abrufen */
       }
       if (Date.now() - last < 20 * 60 * 1000) return;
-      const acts = await fetchGarminActs(7).catch(() => null);
-      if (!alive || !acts) return;
+      const sync = await fetchGarminActs(7).catch(() => null);
+      if (!alive || !sync) return;
+      const { acts, steps: syncSteps } = sync;
+      // Schritte auch aus dem Abruf der Aktivitäten übernehmen (gleiche Verbindung, wirkt sofort ohne neue Server-Version)
+      if (Object.keys(syncSteps).length) {
+        update((p) => {
+          const cur = p.steps ?? {};
+          return Object.entries(syncSteps).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...syncSteps } } : p;
+        });
+      }
       try {
         localStorage.setItem('s60.garmin.acts', String(Date.now()));
       } catch {
@@ -110,6 +161,15 @@ export default function App() {
       document.removeEventListener('visibilitychange', pull);
     };
   }, [update]);
+
+  // Wasserstand an die Push-Funktion melden (nur wenn die Erinnerung aufs Handy eingeschaltet ist), damit sie nicht umsonst erinnert
+  const todayWater = data.water[toISO(new Date())] ?? 0;
+  const waterGoal = waterGoalMl(currentWeight(toISO(new Date()), data));
+  useEffect(() => {
+    if (!pushWanted()) return;
+    const t = window.setTimeout(() => waterSync(toISO(new Date()), todayWater, waterGoal), 1500);
+    return () => window.clearTimeout(t);
+  }, [todayWater, waterGoal]);
 
   if (!data.settings.onboarded) return <Onboarding update={update} />;
 
@@ -152,6 +212,7 @@ export default function App() {
         </button>
         {TABS.slice(2).map(tabButton)}
       </nav>
+      <WaterGate data={data} update={update} />
       {adding && <AddFood meal={adding} date={date} data={data} update={update} notify={notify} onClose={() => setAdding(null)} />}
       {toast && (
         <div className="toast" role="status">

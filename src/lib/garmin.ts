@@ -27,11 +27,15 @@ export async function fetchGarminSteps(): Promise<Record<string, number> | null>
 }
 
 /** Aktivitäten der letzten Tage aus Garmin (Aktion «sync» der Funktion «garmin»; liefert auch Kalorien pro Einheit). */
-export async function fetchGarminActs(days = 7): Promise<GarminAct[] | null> {
+export async function fetchGarminActs(days = 7): Promise<{ acts: GarminAct[]; steps: Record<string, number> } | null> {
   const to = toISO(new Date());
   const { data, error } = await sb.functions.invoke('garmin', { body: { action: 'sync', from: addDays(to, -(days - 1)), to } });
   if (error || !Array.isArray(data?.acts)) return null;
-  return (data.acts as Record<string, unknown>[])
+  const steps: Record<string, number> = {};
+  for (const [d, w] of Object.entries((data.well ?? {}) as Record<string, { steps?: number | null }>)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && typeof w?.steps === 'number') steps[d] = Math.round(w.steps);
+  }
+  const acts = (data.acts as Record<string, unknown>[])
     .filter((a) => typeof a.id === 'string' && typeof a.date === 'string' && typeof a.group === 'string')
     .map((a) => ({
       id: a.id as string,
@@ -42,6 +46,7 @@ export async function fetchGarminActs(days = 7): Promise<GarminAct[] | null> {
       kcal: typeof a.kcal === 'number' ? a.kcal : null,
       hr: typeof a.hr === 'number' ? a.hr : null,
     }));
+  return { acts, steps };
 }
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -98,6 +103,56 @@ export async function fetchPlanOverrides(): Promise<Record<number, PlanDay> | nu
   return out;
 }
 const dayKeyToISO = (i: number) => toISO(new Date(2026, 9, 12 + i));
+
+/** Öffentlicher VAPID-Schlüssel der Push-Anlage (gleicher wie in der Trainings-App, der private liegt nur als Supabase-Secret). */
+const VAPID_PUBLIC = 'BOwB9H2CeGF-CKjztQ6Q6t7a-NRclS8Aq_JgQ3YK_wWJSYxGWV4HWP7dxnB9sYwipUn5K0qedTnsLngHF9R5PN0';
+export type PushResult = 'on' | 'denied' | 'unsupported' | 'login' | 'error';
+
+const b64 = (k: string) => Uint8Array.from(atob(k.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+
+/** Push-Erinnerungen einschalten: Erlaubnis, Abo im Browser, Abo an die Funktion «water» melden. */
+export async function waterPushOn(): Promise<PushResult> {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || typeof Notification === 'undefined') return 'unsupported';
+  if (!(await garminUser())) return 'login';
+  const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+  if (perm !== 'granted') return 'denied';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(VAPID_PUBLIC) }));
+    const j = sub.toJSON();
+    const { error } = await sb.functions.invoke('water', { body: { action: 'subscribe', sub: { endpoint: sub.endpoint, p256dh: j.keys?.p256dh, auth: j.keys?.auth } } });
+    return error ? 'error' : 'on';
+  } catch {
+    return 'error';
+  }
+}
+
+export async function waterPushOff(): Promise<void> {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) {
+      await sb.functions.invoke('water', { body: { action: 'off', endpoint: sub.endpoint } });
+      await sub.unsubscribe();
+    }
+  } catch {
+    /* egal */
+  }
+}
+
+/** Aktuellen Wasserstand an die Funktion melden, damit sie nur erinnert, wenn du wirklich hinten liegst. */
+export async function waterSync(day: string, ml: number, goal: number): Promise<void> {
+  try {
+    await sb.functions.invoke('water', { body: { action: 'state', day, ml, goal } });
+  } catch {
+    /* egal */
+  }
+}
+
+export async function waterPushTest(): Promise<boolean> {
+  const { data, error } = await sb.functions.invoke('water', { body: { action: 'test' } });
+  return !error && (data?.sent ?? 0) > 0;
+}
 
 export async function accessToken(): Promise<string | null> {
   const { data } = await sb.auth.getSession();
