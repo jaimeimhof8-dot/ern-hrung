@@ -3,7 +3,7 @@ import { addDays, garminExtrasForDay, toISO, type Extra, type Meal } from './lib
 import { Icon, mealByClock, type IconName, type Notify, type ToastAction } from './ui';
 import AddFood from './screens/AddFood';
 import { useData } from './lib/storage';
-import { fetchGarminActs, fetchGarminSteps, garminUser } from './lib/garmin';
+import { fetchGarminActs, fetchGarminSteps, fetchPlanOverrides, garminUser } from './lib/garmin';
 import Onboarding from './screens/Onboarding';
 import Today from './screens/Today';
 import Week from './screens/Week';
@@ -63,6 +63,10 @@ export default function App() {
         const cur = p.steps ?? {};
         return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
       });
+      // Plan der Trainings-App (Tausch, Anpassung, Ausfall): damit gilt hier dasselbe Training wie dort
+      const ov = await fetchPlanOverrides().catch(() => null);
+      if (!alive) return;
+      if (ov) update((p) => (JSON.stringify(p.planOverride ?? {}) === JSON.stringify(ov) ? p : { ...p, planOverride: ov }));
       // Zusatz-Einheiten: Garmin-Aktivitäten ausserhalb des Plans übernehmen (höchstens alle 20 Minuten, der Abruf ist schwer)
       let last = 0;
       try {

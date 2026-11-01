@@ -353,7 +353,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         </div>
         {extras.map((e) => (
           <div className="ent" key={e.id}>
-            <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min{e.src === 'garmin' ? ' · Garmin' : ''}</span><span className="xs muted">{e.src === 'garmin' ? 'nicht im Plan' : e.level} · ca. {e.kcal} kcal</span></div>
+            <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min{e.src === 'garmin' ? ' · Garmin' : ''}</span><span className="xs muted">{e.src === 'garmin' && e.gkcal ? `Garmin ${e.gkcal} − Grundumsatz ${e.rest ?? 0} = ca. ${e.kcal} kcal, davon ${Math.round(EXTRA_BACK * 100)} %` : `${e.src === 'garmin' ? 'nicht im Plan, geschätzt' : e.level} · ca. ${e.kcal} kcal`}</span></div>
             <span className="k">+{Math.round(e.kcal * EXTRA_BACK / 10) * 10}</span>
             <button className="x" onClick={() => { removeExtra(e.id); if (e.src === 'garmin') notify('Einheit ausgeblendet', [{ label: 'Rückgängig', run: () => restoreExtra(e.id) }]); }} aria-label={`${EXTRA_LABEL[e.sport]} ${e.src === 'garmin' ? 'ausblenden' : 'entfernen'}`}><Icon n="x" s /></button>
           </div>

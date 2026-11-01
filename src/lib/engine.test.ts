@@ -144,4 +144,19 @@ assert.equal(gx[0].gid, 'g2');
 assert.equal(gx[0].sport, 'rad');
 assert.ok(gx[0].kcal > 0 && gx[0].kcal < 700);
 assert.equal(garminExtrasForDay('2026-10-16', [{ id: 'g4', name: 'Lauf', group: 'run', date: '2026-10-16', time: 1800, kcal: 300, hr: 150 }], base).length, 1);
+// Plan aus der Trainings-App: Samstag (Bike) wurde zu Lauf getauscht -> Lauf ist geplant, die Fahrt wird Zusatz
+const swapped = { ...base, planOverride: { 5: { t: 'Lockerer Lauf', k: 'lauf', i: ['40′'] } } };
+assert.equal(computeDay(sat, swapped).trainingDay?.k, 'lauf');
+const swappedActs = [
+  { id: 'r1', name: 'Lauf', group: 'run', date: sat, time: 2400, kcal: 450, hr: 140 },
+  { id: 'b1', name: 'Rad', group: 'ride', date: sat, time: 3600, kcal: 600, hr: 130 },
+];
+assert.deepEqual(garminExtrasForDay(sat, swappedActs, swapped).map((e) => e.gid), ['b1']);
+// Tausch Lauf -> Velofahren: das Velofahren ist geplant, keine Zusatz-Einheit
+const toBike = { ...base, planOverride: { 5: { t: 'Velo', k: 'bike', i: [] } } };
+assert.equal(garminExtrasForDay(sat, [swappedActs[1]], toBike).length, 0);
+const gx1 = garminExtrasForDay('2026-10-16', [{ id: 'z', name: 'Rad', group: 'ride', date: '2026-10-16', time: 3600, kcal: 600, hr: 130 }], base)[0];
+assert.ok(gx1.gkcal === 600 && gx1.rest! > 0 && Math.abs(gx1.kcal - (600 - gx1.rest!)) <= 5);
+// Ausgefallen/Ruhe (Mobility) zählt als Low-Tag
+assert.equal(classify({ t: 'Mobility', k: 'mob', i: [] }), 'WPF_LOW');
 console.log('Funktionstests ok');
