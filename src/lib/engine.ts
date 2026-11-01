@@ -115,6 +115,10 @@ export interface Extra {
   src?: 'garmin';
   /** Garmin-Aktivitäts-ID, damit ein erneutes Abholen nichts doppelt anlegt */
   gid?: string;
+  /** Garmin-Gesamtkalorien der Einheit (inkl. Grundumsatz), nur zur Anzeige der Herleitung */
+  gkcal?: number;
+  /** Grundumsatz in dieser Zeit, der vom Garmin-Wert abgezogen wurde */
+  rest?: number;
   /** vom Nutzer ausgeblendet (z. B. war doch geplant); bleibt gespeichert, damit es nicht wiederkommt */
   off?: boolean;
 }
@@ -130,6 +134,8 @@ export interface Data {
   steps: Record<string, number>;
   /** Zusätzliche Einheiten ausserhalb des Plans, pro Tag */
   extras: Record<string, Extra[]>;
+  /** Abweichungen der Trainings-App vom eingebauten Plan (Tausch, Änderung, Ausfall, Verletzung), pro Plantag */
+  planOverride?: Record<number, PlanDay>;
   customFoods: Food[];
   favorites: string[];
   templates: Template[];
@@ -346,7 +352,7 @@ const PLAN_GROUPS: Record<string, string[]> = {
  */
 export function garminExtrasForDay(date: string, acts: GarminAct[], d: Data): Extra[] {
   const day = acts.filter((a) => a.date === date && a.time >= 12 * 60).sort((x, y) => y.time - x.time);
-  const k = trainingFor(date)?.k ?? 'rest';
+  const k = trainingFor(date, d)?.k ?? 'rest';
   const groups = PLAN_GROUPS[k] ?? [];
   const limit = groups.length > 1 ? 2 : 1;
   const used = new Set<string>();
@@ -368,15 +374,20 @@ export function garminExtrasForDay(date: string, acts: GarminAct[], d: Data): Ex
       const kcal = a.kcal != null && a.kcal > 0
         ? Math.max(0, Math.round((a.kcal - restPerHour * (a.time / 3600)) / 10) * 10)
         : extraKcal(sport, min, 'mittel', weight);
-      return { id: `g-${a.id}`, sport, min, level: 'mittel' as ExtraLevel, kcal, src: 'garmin' as const, gid: a.id };
+      const hasG = a.kcal != null && a.kcal > 0;
+      return {
+        id: `g-${a.id}`, sport, min, level: 'mittel' as ExtraLevel, kcal, src: 'garmin' as const, gid: a.id,
+        ...(hasG ? { gkcal: Math.round(a.kcal as number), rest: Math.round(restPerHour * (a.time / 3600)) } : {}),
+      };
     });
 }
 
 // ---------- Tagestyp aus dem Trainingsplan ----------
 
-export function trainingFor(date: string): PlanDay | null {
+/** Plan eines Tages. Mit `d` gelten Änderungen aus der Trainings-App (Tausch, Anpassung, Ausfall) vor dem eingebauten Plan. */
+export function trainingFor(date: string, d?: Pick<Data, 'planOverride'>): PlanDay | null {
   const idx = dayIndex(date);
-  return PLAN.days[idx] ?? null;
+  return d?.planOverride?.[idx] ?? PLAN.days[idx] ?? null;
 }
 
 export function classify(day: PlanDay | null): DayType {
@@ -384,6 +395,7 @@ export function classify(day: PlanDay | null): DayType {
   switch (day.k) {
     case 'rest':
     case 'bike':
+    case 'mob':
       return 'WPF_LOW';
     case 'kraft':
       return 'MODERATE';
@@ -401,13 +413,13 @@ function glycogenBoost(date: string, d: Data): boolean {
   const highs: string[] = [];
   for (let i = 1; i <= 35 && highs.length < 6; i++) {
     const x = addDays(date, -i);
-    if (classify(trainingFor(x)) === 'HIGH_PERFORMANCE') highs.push(x);
+    if (classify(trainingFor(x, d)) === 'HIGH_PERFORMANCE') highs.push(x);
   }
   for (let k = 0; k + 1 < highs.length; k++) {
     if (d.logs[highs[k]]?.feel !== 'zaeh' || d.logs[highs[k + 1]]?.feel !== 'zaeh') continue;
     let count = 0;
     for (let x = addDays(highs[k], 1); x <= date; x = addDays(x, 1)) {
-      if (classify(trainingFor(x)) === 'MODERATE') {
+      if (classify(trainingFor(x, d)) === 'MODERATE') {
         count++;
         if (x === date) return count <= 2;
       }
@@ -547,7 +559,7 @@ function buildSlots(type: DayType, P: number, C: number, F: number): Slot[] {
 export function computeDay(date: string, d: Data): DayPlan {
   const s = d.settings;
   const idx = dayIndex(date);
-  const training = trainingFor(date);
+  const training = trainingFor(date, d);
   const postRace = idx > RACE_IDX;
   const outside = idx < 0 || postRace;
   const type: DayType = outside ? 'MODERATE' : classify(training);
