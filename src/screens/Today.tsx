@@ -188,7 +188,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const [exSport, setExSport] = useState<ExtraSport>('rad');
   const [exLevel, setExLevel] = useState<ExtraLevel>('mittel');
   const [exMin, setExMin] = useState('');
-  const extras = data.extras?.[date] ?? [];
+  const extras = (data.extras?.[date] ?? []).filter((e) => !e.off);
   const exMinN = num(exMin);
   const exPreview = exMinN != null && exMinN > 0 ? extraKcal(exSport, exMinN, exLevel, currentWeight(date, data)) : 0;
   const addExtra = () => {
@@ -198,8 +198,15 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
     setExMin('');
     notify(`${EXTRA_LABEL[e.sport]} ${e.min} min eingetragen: ca. ${e.kcal} kcal`, [{ label: 'Rückgängig', run: () => removeExtra(e.id) }]);
   };
+  // Garmin-Einheiten werden nur ausgeblendet (sonst kämen sie beim nächsten Abruf zurück), eigene gelöscht
   const removeExtra = (id: string) =>
-    update((p) => ({ ...p, extras: { ...(p.extras ?? {}), [date]: (p.extras?.[date] ?? []).filter((x) => x.id !== id) } }));
+    update((p) => {
+      const list = p.extras?.[date] ?? [];
+      const next = list.some((x) => x.id === id && x.src === 'garmin') ? list.map((x) => (x.id === id ? { ...x, off: true } : x)) : list.filter((x) => x.id !== id);
+      return { ...p, extras: { ...(p.extras ?? {}), [date]: next } };
+    });
+  const restoreExtra = (id: string) =>
+    update((p) => ({ ...p, extras: { ...(p.extras ?? {}), [date]: (p.extras?.[date] ?? []).map((x) => (x.id === id ? { ...x, off: undefined } : x)) } }));
   const setSteps = (v: number | null) =>
     update((p) => {
       const next = { ...(p.steps ?? {}) };
@@ -342,15 +349,16 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
       <section className="c tight">
         <div className="meal-h">
           <span className="lab">Zusatz-Einheit</span>
-          <span className="xs muted">{extras.length ? `${extras.length} heute` : 'ausser Plan'}</span>
+          <span className="xs muted">{extras.length ? `${extras.length} ${date === today ? 'heute' : 'an diesem Tag'}` : 'ausser Plan'}</span>
         </div>
         {extras.map((e) => (
           <div className="ent" key={e.id}>
-            <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min</span><span className="xs muted">{e.level} · ca. {e.kcal} kcal</span></div>
+            <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min{e.src === 'garmin' ? ' · Garmin' : ''}</span><span className="xs muted">{e.src === 'garmin' ? 'nicht im Plan' : e.level} · ca. {e.kcal} kcal</span></div>
             <span className="k">+{Math.round(e.kcal * EXTRA_BACK / 10) * 10}</span>
-            <button className="x" onClick={() => removeExtra(e.id)} aria-label={`${EXTRA_LABEL[e.sport]} entfernen`}><Icon n="x" s /></button>
+            <button className="x" onClick={() => { removeExtra(e.id); if (e.src === 'garmin') notify('Einheit ausgeblendet', [{ label: 'Rückgängig', run: () => restoreExtra(e.id) }]); }} aria-label={`${EXTRA_LABEL[e.sport]} ${e.src === 'garmin' ? 'ausblenden' : 'entfernen'}`}><Icon n="x" s /></button>
           </div>
         ))}
+        <div className="xs muted">Einheiten ausserhalb des Plans kommen von Garmin von selbst. Nur wenn Garmin nicht verbunden ist, trägst du sie hier ein.</div>
         <div className="chips" role="group" aria-label="Sportart">
           {(Object.keys(EXTRA_LABEL) as ExtraSport[]).map((k) => (
             <button key={k} className={`chip ${exSport === k ? 'on' : ''}`} onClick={() => setExSport(k)}>{EXTRA_LABEL[k]}</button>
