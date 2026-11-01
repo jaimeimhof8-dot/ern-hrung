@@ -77,6 +77,8 @@ export interface Template {
   f: number;
   portions: number;
   items: TemplateItem[];
+  /** Getränk: erscheint in der Schnellwahl im eigenen Bereich */
+  drink?: boolean;
 }
 
 export interface Entry {

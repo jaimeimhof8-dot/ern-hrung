@@ -166,10 +166,11 @@ export const todayISO = () => toISO(new Date());
 // ---------- Standardmahlzeiten ----------
 
 /** Standardmahlzeit aus gewogenen Einträgen; Gesamtsumme geteilt durch die Portionen. */
-export function makeTemplate(name: string, items: Entry[], portions: number): Template {
+export function makeTemplate(name: string, items: Entry[], portions: number, drink = false): Template {
   const t = totals(items);
   const n = Math.max(0.25, portions);
   return {
+    ...(drink ? { drink: true } : {}),
     id: `t-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
     name: name.trim(),
     portions: n,

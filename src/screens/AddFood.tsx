@@ -72,6 +72,15 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
     notify(`«${tpl.name}» gespeichert: ${tpl.kcal} kcal pro Portion`);
   };
 
+  // Foto-Schätzung als Standard speichern (z. B. Cappuccino), danach ohne Foto auswählbar
+  const saveStandard = (name: string, items: Entry[], drink: boolean) => {
+    const tpl = makeTemplate(name, items, 1, drink);
+    update((p) => ({ ...p, templates: [tpl, ...p.templates] }));
+    notify(`«${tpl.name}» gespeichert: ${tpl.kcal} kcal`, [
+      { label: 'Rückgängig', run: () => update((p) => ({ ...p, templates: p.templates.filter((x) => x.id !== tpl.id) })) },
+    ]);
+  };
+
   const removeTemplate = (tpl: Template) => {
     update((p) => ({ ...p, templates: p.templates.filter((x) => x.id !== tpl.id) }));
     notify(`«${tpl.name}» gelöscht`, [{ label: 'Rückgängig', run: () => update((p) => ({ ...p, templates: [tpl, ...p.templates] })) }]);
@@ -184,7 +193,7 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
             />
           )}
 
-          {mode === 'scan' && <Scan meal={meal} onFood={pickScanned} onEntries={addEntries} />}
+          {mode === 'scan' && <Scan meal={meal} onFood={pickScanned} onEntries={addEntries} onSaveStandard={saveStandard} />}
 
           {mode === 'mahlzeiten' && (
             <>
@@ -193,7 +202,7 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
                 <div className="food" key={tpl.id}>
                   <button className="t" style={{ flex: 1, textAlign: 'left', minHeight: 44 }} onClick={() => addEntry(entryFromTemplate(tpl, 1, meal))}>
                     <span className="name">{tpl.name}</span>
-                    <span className="xs muted">{tpl.kcal} kcal · {tpl.p} g Protein · {tpl.items.length} {tpl.items.length === 1 ? 'Zutat' : 'Zutaten'}</span>
+                    <span className="xs muted">{tpl.drink ? 'Getränk · ' : ''}{tpl.kcal} kcal · {tpl.p} g Protein · {tpl.items.length} {tpl.items.length === 1 ? 'Zutat' : 'Zutaten'}</span>
                   </button>
                   <button className="x" aria-label={`${tpl.name} löschen`} onClick={() => removeTemplate(tpl)}><Icon n="x" s /></button>
                 </div>
