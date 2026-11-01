@@ -13,6 +13,7 @@ function normalize(p: Partial<Data> | null | undefined): Data {
     diary: q.diary ?? {},
     water: q.water ?? {},
     steps: q.steps ?? {},
+    extras: q.extras ?? {},
     customFoods: q.customFoods ?? [],
     favorites: q.favorites ?? [],
     templates: q.templates ?? [],

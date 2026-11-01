@@ -1,4 +1,4 @@
-import { addDays, computeDay, parseISO, toISO, weekDeficitKg, type Data } from '../lib/engine';
+import { EXTRA_LABEL, addDays, computeDay, parseISO, toISO, weekDeficitKg, type Data } from '../lib/engine';
 import { totals } from '../lib/analytics';
 import { Head, Metric, TYPE_COLOR, fmt, shortDate } from '../ui';
 
@@ -32,7 +32,7 @@ export default function Week({ date, setDate, data, open }: { date: string; setD
             <button key={p.date} className="li" style={{ width: '100%', textAlign: 'left', background: p.date === today ? 'color-mix(in srgb, var(--accent) 8%, transparent)' : undefined, borderRadius: p.date === today ? 'var(--r-s)' : undefined }} onClick={() => open(p.date)} aria-label={`${WD[i]}: ${p.trainingDay?.t ?? 'frei'}, Ziel ${p.kcal} kcal`}>
               <span className="mono muted" style={{ width: 28 }}>{WD[i]}</span>
               <span className="t">
-                <span className="strong"><span className="sw" style={{ display: 'inline-flex', '--c': c } as React.CSSProperties}><i />{p.trainingDay ? p.trainingDay.t : 'frei'}</span></span>
+                <span className="strong"><span className="sw" style={{ display: 'inline-flex', '--c': c } as React.CSSProperties}><i />{p.trainingDay ? p.trainingDay.t : 'frei'}{data.extras?.[p.date]?.length ? ` + ${data.extras[p.date].map((e) => EXTRA_LABEL[e.sport]).join(', ')}` : ''}</span></span>
                 {eaten > 0 && (
                   <span className="mb" style={{ '--c': eaten > p.kcal * 1.05 ? 'var(--danger)' : c } as React.CSSProperties}><span className="trk"><span className="fil" style={{ width: `${pct}%`, display: 'block' }} /></span></span>
                 )}

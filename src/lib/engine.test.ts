@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { DEFAULT_DATA, computeDay, classify, addDays, adaptAfterWeighIn, type Data } from './engine';
+import { DEFAULT_DATA, extraKcal, computeDay, classify, addDays, adaptAfterWeighIn, type Data } from './engine';
 
 const base: Data = {
   ...DEFAULT_DATA,
@@ -126,4 +126,9 @@ assert.equal(calibration({ ...base, diary: {}, weights: {} }, '2026-11-28').read
 // Kalibrierung wirkt auf den Tagesplan
 const withCal = computeDay('2026-10-13', { ...base, settings: { ...base.settings, calib: 150 } });
 assert.equal(withCal.kcal, 2950);
+// Zusatz-Einheit: Rad 90 min mittel bei 80 kg = (8-1)*80*1,5 = 840 kcal netto, 60 % davon (504 -> 500) aufs Tagesziel
+assert.equal(extraKcal('rad', 90, 'mittel', 80), 840);
+const withExtra = computeDay('2026-10-13', { ...base, extras: { '2026-10-13': [{ id: 'x', sport: 'rad', min: 90, level: 'mittel', kcal: 840 }] } });
+assert.equal(withExtra.kcal, computeDay('2026-10-13', base).kcal + 500);
+assert.ok(withExtra.notes.some((n) => n.includes('Zusatz-Einheit')));
 console.log('Funktionstests ok');

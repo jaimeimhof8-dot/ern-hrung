@@ -101,6 +101,18 @@ export interface DayLog {
   feel?: Feel;
 }
 
+export type ExtraSport = 'rad' | 'lauf' | 'kraft' | 'schwimmen' | 'andere';
+export type ExtraLevel = 'leicht' | 'mittel' | 'hart';
+
+/** Zusätzliche Einheit: kcal sind die Schätzung (netto, ohne Grundumsatz), Dauer in Minuten. */
+export interface Extra {
+  id: string;
+  sport: ExtraSport;
+  min: number;
+  level: ExtraLevel;
+  kcal: number;
+}
+
 export interface Data {
   settings: Settings;
   logs: Record<string, DayLog>;
@@ -110,6 +122,8 @@ export interface Data {
   water: Record<string, number>;
   /** Schritte pro Tag (von Hand eingetragen) */
   steps: Record<string, number>;
+  /** Zusätzliche Einheiten ausserhalb des Plans, pro Tag */
+  extras: Record<string, Extra[]>;
   customFoods: Food[];
   favorites: string[];
   templates: Template[];
@@ -179,6 +193,7 @@ export const DEFAULT_DATA: Data = {
   diary: {},
   water: {},
   steps: {},
+  extras: {},
   customFoods: [],
   favorites: [],
   templates: [],
@@ -271,6 +286,26 @@ export const STEP_BASE = 7500;
 export function stepAdjust(steps: number, weightKg: number): number {
   const raw = (steps - STEP_BASE) * 0.0006 * weightKg;
   return Math.round(Math.max(-300, Math.min(600, raw)) / 10) * 10;
+}
+
+/** MET-Werte je Sportart und Intensität (Compendium of Physical Activities, gerundet). */
+const MET: Record<ExtraSport, Record<ExtraLevel, number>> = {
+  rad: { leicht: 5.8, mittel: 8, hart: 10 },
+  lauf: { leicht: 8.3, mittel: 10, hart: 12 },
+  kraft: { leicht: 3.5, mittel: 5, hart: 6 },
+  schwimmen: { leicht: 5.8, mittel: 8, hart: 10 },
+  andere: { leicht: 3.5, mittel: 5, hart: 7 },
+};
+export const EXTRA_LABEL: Record<ExtraSport, string> = { rad: 'Rad', lauf: 'Lauf', kraft: 'Kraft', schwimmen: 'Schwimmen', andere: 'Andere' };
+/** Anteil der Zusatz-Kalorien, der aufs Tagesziel kommt. Der Rest schützt das Defizit und fängt Schätzfehler (ca. ±25 %) ab. */
+export const EXTRA_BACK = 0.6;
+/** Netto-Verbrauch: (MET − 1) × kg × Stunden, weil der Grundumsatz schon im Tagesziel steckt. */
+export function extraKcal(sport: ExtraSport, min: number, level: ExtraLevel, weightKg: number): number {
+  return Math.max(0, Math.round(((MET[sport][level] - 1) * weightKg * (min / 60)) / 10) * 10);
+}
+/** Kalorien aufs Tagesziel aus allen Zusatz-Einheiten eines Tages. */
+export function extraAdjust(list: Extra[] | undefined): number {
+  return Math.round(((list ?? []).reduce((a, e) => a + e.kcal, 0) * EXTRA_BACK) / 10) * 10;
 }
 
 // ---------- Tagestyp aus dem Trainingsplan ----------
@@ -501,6 +536,12 @@ export function computeDay(date: string, d: Data): DayPlan {
       kcal += adj;
       notes.push(`${adj > 0 ? '+' : '−'}${Math.abs(adj)} kcal durch ${steps.toLocaleString('de-CH')} Schritte (Basis ${STEP_BASE.toLocaleString('de-CH')}).`);
     }
+  }
+
+  const extra = extraAdjust(d.extras?.[date]);
+  if (extra > 0 && !outside) {
+    kcal += extra;
+    notes.push(`+${extra} kcal durch Zusatz-Einheit (${Math.round(EXTRA_BACK * 100)} % von ${(d.extras[date] ?? []).reduce((a, e) => a + e.kcal, 0)} kcal).`);
   }
 
   const eee = EEE[type];

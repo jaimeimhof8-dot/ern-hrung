@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   DAY_LABEL,
   addDays,
@@ -9,6 +9,9 @@ import {
   emptyLog,
   isProtected,
   STEP_BASE,
+  EXTRA_BACK,
+  EXTRA_LABEL,
+  extraKcal,
   stepAdjust,
   parseISO,
   protectAfterEnergy,
@@ -16,6 +19,9 @@ import {
   type Data,
   type Energy,
   type Entry,
+  type Extra,
+  type ExtraLevel,
+  type ExtraSport,
   type Feel,
   type Meal,
   type Template,
@@ -78,6 +84,27 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         },
       },
     ]);
+  };
+
+  // Nachschlag: gleichen Eintrag skaliert kopieren, als geschätzt markieren
+  const [repeatId, setRepeatId] = useState<string | null>(null);
+  const REPEAT: [string, number][] = [['½', 0.5], ['¾', 0.75], ['Gleich', 1], ['1½', 1.5]];
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const repeatEntry = (e: Entry, label: string, f: number) => {
+    const copy: Entry = {
+      ...e,
+      id: uid(),
+      foodId: undefined,
+      kcal: Math.round(e.kcal * f),
+      p: r1(e.p * f),
+      c: r1(e.c * f),
+      f: r1(e.f * f),
+      amount: `Nachschlag ${label}`,
+      est: true,
+    };
+    addEntries([copy]);
+    setRepeatId(null);
+    notify(`Nachschlag «${e.name}» ${label}: ${copy.kcal} kcal`, [{ label: 'Rückgängig', run: () => removeIds([copy.id]) }]);
   };
 
   const yesterday = data.diary[addDays(date, -1)] ?? [];
@@ -158,6 +185,21 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const stepsToday = data.steps?.[date];
   const stepAdj = stepsToday != null ? stepAdjust(stepsToday, currentWeight(date, data)) : 0;
   const [stepInput, setStepInput] = useState('');
+  const [exSport, setExSport] = useState<ExtraSport>('rad');
+  const [exLevel, setExLevel] = useState<ExtraLevel>('mittel');
+  const [exMin, setExMin] = useState('');
+  const extras = data.extras?.[date] ?? [];
+  const exMinN = num(exMin);
+  const exPreview = exMinN != null && exMinN > 0 ? extraKcal(exSport, exMinN, exLevel, currentWeight(date, data)) : 0;
+  const addExtra = () => {
+    if (!exMinN || exMinN <= 0 || exMinN > 600) return;
+    const e: Extra = { id: uid(), sport: exSport, min: Math.round(exMinN), level: exLevel, kcal: exPreview };
+    update((p) => ({ ...p, extras: { ...(p.extras ?? {}), [date]: [...(p.extras?.[date] ?? []), e] } }));
+    setExMin('');
+    notify(`${EXTRA_LABEL[e.sport]} ${e.min} min eingetragen: ca. ${e.kcal} kcal`, [{ label: 'Rückgängig', run: () => removeExtra(e.id) }]);
+  };
+  const removeExtra = (id: string) =>
+    update((p) => ({ ...p, extras: { ...(p.extras ?? {}), [date]: (p.extras?.[date] ?? []).filter((x) => x.id !== id) } }));
   const setSteps = (v: number | null) =>
     update((p) => {
       const next = { ...(p.steps ?? {}) };
@@ -297,6 +339,39 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         {stepsToday == null && <div className="xs muted">Verbinde Garmin im Profil, dann kommen die Schritte von selbst.</div>}
       </section>
 
+      <section className="c tight">
+        <div className="meal-h">
+          <span className="lab">Zusatz-Einheit</span>
+          <span className="xs muted">{extras.length ? `${extras.length} heute` : 'ausser Plan'}</span>
+        </div>
+        {extras.map((e) => (
+          <div className="ent" key={e.id}>
+            <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min</span><span className="xs muted">{e.level} · ca. {e.kcal} kcal</span></div>
+            <span className="k">+{Math.round(e.kcal * EXTRA_BACK / 10) * 10}</span>
+            <button className="x" onClick={() => removeExtra(e.id)} aria-label={`${EXTRA_LABEL[e.sport]} entfernen`}><Icon n="x" s /></button>
+          </div>
+        ))}
+        <div className="chips" role="group" aria-label="Sportart">
+          {(Object.keys(EXTRA_LABEL) as ExtraSport[]).map((k) => (
+            <button key={k} className={`chip ${exSport === k ? 'on' : ''}`} onClick={() => setExSport(k)}>{EXTRA_LABEL[k]}</button>
+          ))}
+        </div>
+        <div className="chips" role="group" aria-label="Intensität">
+          {(['leicht', 'mittel', 'hart'] as ExtraLevel[]).map((k) => (
+            <button key={k} className={`chip ${exLevel === k ? 'on' : ''}`} onClick={() => setExLevel(k)}>{k[0].toUpperCase() + k.slice(1)}</button>
+          ))}
+        </div>
+        <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); addExtra(); }}>
+          <label className="in focus-in" style={{ flex: 1 }}>
+            <input inputMode="numeric" placeholder="Dauer in Minuten" value={exMin} onChange={(e) => setExMin(e.target.value)} aria-label="Dauer in Minuten" />
+          </label>
+          <button className="s6-btn s6-btn-quiet" type="submit" disabled={!exPreview}>Hinzufügen</button>
+        </form>
+        <div className="xs muted">
+          {exPreview ? `Schätzung ca. ${exPreview} kcal (±25 %), davon ${Math.round(exPreview * EXTRA_BACK / 10) * 10} kcal auf dein Tagesziel.` : `Von der Schätzung kommen ${Math.round(EXTRA_BACK * 100)} % aufs Tagesziel, der Rest schützt dein Defizit.`}
+        </div>
+      </section>
+
       {proteinTip && date === today && (
         <section className="c tight">
           <span className="lab">Protein anpassen?</span>
@@ -345,11 +420,21 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
                 </>
               );
               return (
-                <div className="ent" key={e.id}>
+                <Fragment key={e.id}>
+                <div className="ent">
                   {tpl ? <button className="t" onClick={() => setPortionId(e.id)} aria-label={`${e.name}: Portion ändern`}>{body}</button> : <div className="t">{body}</div>}
                   <span className="k">{e.kcal}</span>
+                  <button className="x" onClick={() => setRepeatId(repeatId === e.id ? null : e.id)} aria-label={`${e.name}: Nachschlag`} aria-expanded={repeatId === e.id}><Icon n="copy" s /></button>
                   <button className="x" onClick={() => removeIds([e.id])} aria-label={`${e.name} entfernen`}><Icon n="x" s /></button>
                 </div>
+                {repeatId === e.id && (
+                  <div className="qrow" role="group" aria-label={`Nachschlag ${e.name}`}>
+                    {REPEAT.map(([label, f]) => (
+                      <button className="qchip" key={label} onClick={() => repeatEntry(e, label, f)}>{label}<small>{Math.round(e.kcal * f)} kcal</small></button>
+                    ))}
+                  </div>
+                )}
+                </Fragment>
               );
             })}
             {list.length === 0 && quick.length === 0 && !yHas && <div className="xs muted">Noch nichts eingetragen</div>}
