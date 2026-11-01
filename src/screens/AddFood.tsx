@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import type { Data, Entry, Food, Meal, Template } from '../lib/engine';
 import { MEALS, entryFromFood, entryFromTemplate, makeTemplate, totals } from '../lib/analytics';
 import { BUILTIN_FOODS, precisionOf, searchFoods } from '../lib/foods';
-import Scan from './Scan';
+import Scan, { Describe } from './Scan';
 import { Icon, Sheet, num, type Notify, type Update } from '../ui';
 
-type Mode = 'suche' | 'scan' | 'mahlzeiten' | 'schnell' | 'eigen';
+type Mode = 'suche' | 'scan' | 'beschreiben' | 'mahlzeiten' | 'schnell' | 'eigen';
 
 interface Props {
   meal: Meal;
@@ -172,6 +172,7 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
               [
                 ['suche', 'Suchen'],
                 ['scan', 'Scan'],
+                ['beschreiben', 'Text'],
                 ['mahlzeiten', 'Mahlzeiten'],
                 ['schnell', 'Schnell'],
                 ['eigen', 'Neu'],
@@ -192,6 +193,8 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
               }}
             />
           )}
+
+          {mode === 'beschreiben' && <Describe meal={meal} onEntries={addEntries} onSaveStandard={saveStandard} />}
 
           {mode === 'scan' && <Scan meal={meal} onFood={pickScanned} onEntries={addEntries} onSaveStandard={saveStandard} />}
 
