@@ -29,6 +29,8 @@ import {
 import { MEALS, entryFromTemplate, totals, waterGoalMl } from '../lib/analytics';
 import { Head, Icon, num, Macro, Ring, WeighSheet, TYPE_CLASS, TYPE_COLOR, fmt, longDate, shortDate, type Notify, type Update } from '../ui';
 import PortionSheet from './PortionSheet';
+import { gateEnabled, pushWanted, setGateEnabled, setPushWanted, waterExpected } from '../lib/water';
+import { waterPushOff, waterPushOn, waterPushTest, waterSync, type PushResult } from '../lib/garmin';
 
 const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
 const mondayOf = (iso: string) => addDays(iso, -((parseISO(iso).getDay() + 6) % 7));
@@ -157,7 +159,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const addWater = (ml: number) => update((p) => ({ ...p, water: { ...p.water, [date]: Math.max(0, (p.water[date] ?? 0) + ml) } }));
 
   const hour = new Date().getHours();
-  const expected = date === today ? Math.round((waterGoal * Math.min(1, Math.max(0, (hour - 7) / 14))) / 50) * 50 : 0;
+  const expected = date === today ? waterExpected(waterGoal, hour) : 0;
   const behind = Math.max(0, expected - water);
   const [remind, setRemind] = useState(() => {
     try { return localStorage.getItem('water-remind') === '1' && typeof Notification !== 'undefined' && Notification.permission === 'granted'; } catch { return false; }
@@ -180,6 +182,35 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
     setRemind(true);
     try { localStorage.setItem('water-remind', '1'); } catch { /* egal */ }
     notify('Erinnerung an: alle 45 Min., solange die App offen ist');
+  };
+
+  const [gate, setGate] = useState(gateEnabled());
+  const [push, setPush] = useState(pushWanted());
+  const toggleGate = () => {
+    setGate(!gate);
+    setGateEnabled(!gate);
+    notify(!gate ? 'Trink-Pflicht an: ein Vollbild erscheint, wenn du hinten liegst' : 'Trink-Pflicht aus');
+  };
+  const togglePush = async () => {
+    if (push) {
+      setPush(false);
+      setPushWanted(false);
+      await waterPushOff();
+      notify('Push-Erinnerung aus');
+      return;
+    }
+    const r = await waterPushOn();
+    const msg: Record<Exclude<PushResult, 'on'>, string> = {
+      denied: 'Benachrichtigungen sind blockiert. Gib sie in den Handy-Einstellungen für die App frei.',
+      unsupported: 'Dieses Gerät kann keine Push-Nachrichten. Auf dem iPhone muss die App zum Home-Bildschirm hinzugefügt sein.',
+      login: 'Bitte zuerst im Profil anmelden (Garmin-Login).',
+      error: 'Anmeldung für Push fehlgeschlagen. Ist die Funktion «water» bei Supabase eingerichtet?',
+    };
+    if (r !== 'on') return notify(msg[r]);
+    setPush(true);
+    setPushWanted(true);
+    await waterSync(today, data.water[today] ?? 0, waterGoal);
+    notify('Push-Erinnerung an: alle 30 Min. geprüft, 8 bis 21 Uhr', [{ label: 'Test senden', run: async () => notify((await waterPushTest()) ? 'Test gesendet' : 'Test fehlgeschlagen. Ist die Funktion «water» ausgespielt?') }]);
   };
 
   const stepsToday = data.steps?.[date];
@@ -337,7 +368,12 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
           <button className="chip" onClick={() => addWater(-250)} aria-label="250 ml abziehen">−250</button>
         </div>
         {behind >= 300 && <div className="tip"><Icon n="drop" s /><div>Du liegst ca. {behind} ml hinter dem Soll für diese Uhrzeit. Trink jetzt ein Glas.</div></div>}
-        <button className={`chip ${remind ? 'on' : ''}`} style={{ alignSelf: 'flex-start' }} onClick={toggleRemind} aria-pressed={remind}>{remind ? 'Erinnerung an' : 'Ans Trinken erinnern'}</button>
+        <div className="chips" role="group" aria-label="Trink-Erinnerungen">
+          <button className={`chip ${gate ? 'on' : ''}`} onClick={toggleGate} aria-pressed={gate}>Trink-Pflicht</button>
+          <button className={`chip ${push ? 'on' : ''}`} onClick={togglePush} aria-pressed={push}>Push aufs Handy</button>
+          <button className={`chip ${remind ? 'on' : ''}`} onClick={toggleRemind} aria-pressed={remind}>{remind ? 'App-Hinweis an' : 'App-Hinweis'}</button>
+        </div>
+        <div className="xs muted">Trink-Pflicht: ein Vollbild erscheint beim Öffnen, wenn du mehr als 300 ml hinter dem Soll liegst. Push: Erinnerung aufs Handy, auch bei geschlossener App.</div>
       </section>
 
       <section className="c tight">
