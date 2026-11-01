@@ -44,7 +44,7 @@ export default function App() {
     const q = new URLSearchParams(window.location.search);
     const n = Math.round(Number(q.get('steps')));
     if (!q.has('steps')) return;
-    const d = q.get('date') && /^d{4}-d{2}-d{2}$/.test(q.get('date')!) ? q.get('date')! : toISO(new Date());
+    const d = q.get('date') && /^\d{4}-\d{2}-\d{2}$/.test(q.get('date')!) ? q.get('date')! : toISO(new Date());
     if (n >= 0 && n <= 80000) {
       update((p) => ({ ...p, steps: { ...(p.steps ?? {}), [d]: n } }));
       notify(`${n.toLocaleString('de-CH')} Schritte übernommen`);
@@ -58,11 +58,14 @@ export default function App() {
     const pull = async () => {
       if (document.visibilityState !== 'visible' || !(await garminUser())) return;
       const st = await fetchGarminSteps().catch(() => null);
-      if (!alive || !st) return;
-      update((p) => {
-        const cur = p.steps ?? {};
-        return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
-      });
+      if (!alive) return;
+      // Ein Fehler bei den Schritten darf Plan und Aktivitäten nicht blockieren
+      if (st) {
+        update((p) => {
+          const cur = p.steps ?? {};
+          return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
+        });
+      }
       // Plan der Trainings-App (Tausch, Anpassung, Ausfall): damit gilt hier dasselbe Training wie dort
       const ov = await fetchPlanOverrides().catch(() => null);
       if (!alive) return;
@@ -75,8 +78,16 @@ export default function App() {
         /* gesperrt: einfach abrufen */
       }
       if (Date.now() - last < 20 * 60 * 1000) return;
-      const acts = await fetchGarminActs(7).catch(() => null);
-      if (!alive || !acts) return;
+      const sync = await fetchGarminActs(7).catch(() => null);
+      if (!alive || !sync) return;
+      const { acts, steps: syncSteps } = sync;
+      // Schritte auch aus dem Abruf der Aktivitäten übernehmen (gleiche Verbindung, wirkt sofort ohne neue Server-Version)
+      if (Object.keys(syncSteps).length) {
+        update((p) => {
+          const cur = p.steps ?? {};
+          return Object.entries(syncSteps).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...syncSteps } } : p;
+        });
+      }
       try {
         localStorage.setItem('s60.garmin.acts', String(Date.now()));
       } catch {

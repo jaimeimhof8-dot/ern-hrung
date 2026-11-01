@@ -185,6 +185,22 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const stepsToday = data.steps?.[date];
   const stepAdj = stepsToday != null ? stepAdjust(stepsToday, currentWeight(date, data)) : 0;
   const [stepInput, setStepInput] = useState('');
+  const [exOpen, setExOpen] = useState(() => {
+    try {
+      return localStorage.getItem('s60.extra.open') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleEx = () => {
+    const v = !exOpen;
+    setExOpen(v);
+    try {
+      localStorage.setItem('s60.extra.open', v ? '1' : '0');
+    } catch {
+      /* ignorieren */
+    }
+  };
   const [exSport, setExSport] = useState<ExtraSport>('rad');
   const [exLevel, setExLevel] = useState<ExtraLevel>('mittel');
   const [exMin, setExMin] = useState('');
@@ -327,30 +343,48 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
       <section className="c tight">
         <div className="meal-h">
           <span className="lab">Schritte</span>
-          <span className="xs muted">{stepsToday != null ? `${stepsToday.toLocaleString('de-CH')} heute` : 'nicht eingetragen'}</span>
+          <span className="xs muted">{stepsToday != null ? `${date === today ? 'heute' : 'an diesem Tag'}` : 'noch keine'}</span>
         </div>
+        <div className="row" style={{ alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <span className="strong" style={{ fontSize: 28, lineHeight: '34px' }}>{stepsToday != null ? stepsToday.toLocaleString('de-CH') : '–'}</span>
+          <span className="xs muted">Basis {STEP_BASE.toLocaleString('de-CH')}</span>
+        </div>
+        <div className="mb" style={{ '--c': stepAdj < 0 ? 'var(--danger)' : 'var(--accent)' } as React.CSSProperties}>
+          <span className="trk"><span className="fil" style={{ width: `${Math.min(100, ((stepsToday ?? 0) / STEP_BASE) * 100)}%`, display: 'block' }} /></span>
+        </div>
+        {stepsToday != null ? (
+          <>
+            <div className="tip soft">
+              <div>
+                <b style={{ color: 'var(--ink)' }}>{stepAdj === 0 ? 'Kein Einfluss auf dein Ziel' : `${stepAdj > 0 ? '+' : '−'}${Math.abs(stepAdj)} kcal auf dein Tagesziel`}</b>
+                <br />
+                {stepAdj === 0
+                  ? `Du liegst genau auf der Basis von ${STEP_BASE.toLocaleString('de-CH')} Schritten.`
+                  : `${Math.abs(stepsToday - STEP_BASE).toLocaleString('de-CH')} Schritte ${stepAdj > 0 ? 'über' : 'unter'} der Basis. Dein Tagesziel von ${plan.kcal} kcal enthält das schon.`}
+              </div>
+            </div>
+            <div className="xs muted">
+              Im Ziel sind {STEP_BASE.toLocaleString('de-CH')} Schritte eingerechnet. Darüber gibt es ca. 0,0006 kcal pro Schritt und kg Körpergewicht dazu (höchstens +600), darunter gehen welche weg (höchstens −300).{' '}
+              {data.steps?.[date] != null && <button className="link" style={{ padding: 0 }} onClick={() => setSteps(null)}>Wert entfernen</button>}
+            </div>
+          </>
+        ) : (
+          <div className="xs muted">Noch keine Schritte für diesen Tag. Sie kommen von Garmin (Profil verbunden), sobald die App abgerufen hat, oder du trägst sie unten von Hand ein. Ohne Wert rechnet das Ziel mit der Basis von {STEP_BASE.toLocaleString('de-CH')}.</div>
+        )}
         <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); const v = num(stepInput); if (v != null && v >= 0 && v <= 80000) { setSteps(Math.round(v)); setStepInput(''); } }}>
           <label className="in focus-in" style={{ flex: 1 }}>
-            <input inputMode="numeric" placeholder="Schritte von deinem Handy" value={stepInput} onChange={(e) => setStepInput(e.target.value)} aria-label="Schritte" />
+            <input inputMode="numeric" placeholder="Von Hand eintragen" value={stepInput} onChange={(e) => setStepInput(e.target.value)} aria-label="Schritte von Hand" />
           </label>
           <button className="s6-btn s6-btn-quiet" type="submit" disabled={num(stepInput) == null}>Speichern</button>
         </form>
-        {stepsToday != null && (
-          <div className="xs muted">
-            {stepAdj === 0
-              ? `Genau auf der Basis von ${STEP_BASE.toLocaleString('de-CH')} Schritten, dein Ziel bleibt.`
-              : `${stepAdj > 0 ? '+' : '−'}${Math.abs(stepAdj)} kcal auf dein Tagesziel: ${stepAdj > 0 ? 'mehr' : 'weniger'} Schritte als die Basis von ${STEP_BASE.toLocaleString('de-CH')}.`}{' '}
-            <button className="link" style={{ padding: 0 }} onClick={() => setSteps(null)}>Entfernen</button>
-          </div>
-        )}
-        {stepsToday == null && <div className="xs muted">Verbinde Garmin im Profil, dann kommen die Schritte von selbst.</div>}
       </section>
 
       <section className="c tight">
-        <div className="meal-h">
-          <span className="lab">Zusatz-Einheit</span>
-          <span className="xs muted">{extras.length ? `${extras.length} ${date === today ? 'heute' : 'an diesem Tag'}` : 'ausser Plan'}</span>
-        </div>
+        <button className="meal-h" style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, padding: 0, color: 'inherit' }} onClick={toggleEx} aria-expanded={exOpen} aria-controls="extra-body">
+          <span className="lab">Zusatz-Einheit {exOpen ? '▾' : '▸'}</span>
+          <span className="xs muted">{extras.length ? `${extras.length} ${date === today ? 'heute' : 'an diesem Tag'} · +${Math.round(extras.reduce((a, e) => a + e.kcal, 0) * EXTRA_BACK / 10) * 10} kcal` : 'ausser Plan'}</span>
+        </button>
+        {exOpen && (<div id="extra-body" style={{ display: 'contents' }}>
         {extras.map((e) => (
           <div className="ent" key={e.id}>
             <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min{e.src === 'garmin' ? ' · Garmin' : ''}</span><span className="xs muted">{e.src === 'garmin' && e.gkcal ? `Garmin ${e.gkcal} − Grundumsatz ${e.rest ?? 0} = ca. ${e.kcal} kcal, davon ${Math.round(EXTRA_BACK * 100)} %` : `${e.src === 'garmin' ? 'nicht im Plan, geschätzt' : e.level} · ca. ${e.kcal} kcal`}</span></div>
@@ -378,6 +412,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         <div className="xs muted">
           {exPreview ? `Schätzung ca. ${exPreview} kcal (±25 %), davon ${Math.round(exPreview * EXTRA_BACK / 10) * 10} kcal auf dein Tagesziel.` : `Von der Schätzung kommen ${Math.round(EXTRA_BACK * 100)} % aufs Tagesziel, der Rest schützt dein Defizit.`}
         </div>
+        </div>)}
       </section>
 
       {proteinTip && date === today && (

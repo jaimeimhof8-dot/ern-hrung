@@ -27,11 +27,15 @@ export async function fetchGarminSteps(): Promise<Record<string, number> | null>
 }
 
 /** Aktivitäten der letzten Tage aus Garmin (Aktion «sync» der Funktion «garmin»; liefert auch Kalorien pro Einheit). */
-export async function fetchGarminActs(days = 7): Promise<GarminAct[] | null> {
+export async function fetchGarminActs(days = 7): Promise<{ acts: GarminAct[]; steps: Record<string, number> } | null> {
   const to = toISO(new Date());
   const { data, error } = await sb.functions.invoke('garmin', { body: { action: 'sync', from: addDays(to, -(days - 1)), to } });
   if (error || !Array.isArray(data?.acts)) return null;
-  return (data.acts as Record<string, unknown>[])
+  const steps: Record<string, number> = {};
+  for (const [d, w] of Object.entries((data.well ?? {}) as Record<string, { steps?: number | null }>)) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && typeof w?.steps === 'number') steps[d] = Math.round(w.steps);
+  }
+  const acts = (data.acts as Record<string, unknown>[])
     .filter((a) => typeof a.id === 'string' && typeof a.date === 'string' && typeof a.group === 'string')
     .map((a) => ({
       id: a.id as string,
@@ -42,6 +46,7 @@ export async function fetchGarminActs(days = 7): Promise<GarminAct[] | null> {
       kcal: typeof a.kcal === 'number' ? a.kcal : null,
       hr: typeof a.hr === 'number' ? a.hr : null,
     }));
+  return { acts, steps };
 }
 
 type Raw = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
