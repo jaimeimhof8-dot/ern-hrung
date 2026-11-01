@@ -9,6 +9,9 @@ import {
   emptyLog,
   isProtected,
   STEP_BASE,
+  EXTRA_BACK,
+  EXTRA_LABEL,
+  extraKcal,
   stepAdjust,
   parseISO,
   protectAfterEnergy,
@@ -16,6 +19,9 @@ import {
   type Data,
   type Energy,
   type Entry,
+  type Extra,
+  type ExtraLevel,
+  type ExtraSport,
   type Feel,
   type Meal,
   type Template,
@@ -158,6 +164,21 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const stepsToday = data.steps?.[date];
   const stepAdj = stepsToday != null ? stepAdjust(stepsToday, currentWeight(date, data)) : 0;
   const [stepInput, setStepInput] = useState('');
+  const [exSport, setExSport] = useState<ExtraSport>('rad');
+  const [exLevel, setExLevel] = useState<ExtraLevel>('mittel');
+  const [exMin, setExMin] = useState('');
+  const extras = data.extras?.[date] ?? [];
+  const exMinN = num(exMin);
+  const exPreview = exMinN != null && exMinN > 0 ? extraKcal(exSport, exMinN, exLevel, currentWeight(date, data)) : 0;
+  const addExtra = () => {
+    if (!exMinN || exMinN <= 0 || exMinN > 600) return;
+    const e: Extra = { id: uid(), sport: exSport, min: Math.round(exMinN), level: exLevel, kcal: exPreview };
+    update((p) => ({ ...p, extras: { ...(p.extras ?? {}), [date]: [...(p.extras?.[date] ?? []), e] } }));
+    setExMin('');
+    notify(`${EXTRA_LABEL[e.sport]} ${e.min} min eingetragen: ca. ${e.kcal} kcal`, [{ label: 'Rückgängig', run: () => removeExtra(e.id) }]);
+  };
+  const removeExtra = (id: string) =>
+    update((p) => ({ ...p, extras: { ...(p.extras ?? {}), [date]: (p.extras?.[date] ?? []).filter((x) => x.id !== id) } }));
   const setSteps = (v: number | null) =>
     update((p) => {
       const next = { ...(p.steps ?? {}) };
@@ -295,6 +316,39 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
           </div>
         )}
         {stepsToday == null && <div className="xs muted">Verbinde Garmin im Profil, dann kommen die Schritte von selbst.</div>}
+      </section>
+
+      <section className="c tight">
+        <div className="meal-h">
+          <span className="lab">Zusatz-Einheit</span>
+          <span className="xs muted">{extras.length ? `${extras.length} heute` : 'ausser Plan'}</span>
+        </div>
+        {extras.map((e) => (
+          <div className="ent" key={e.id}>
+            <div className="t"><span className="strong">{EXTRA_LABEL[e.sport]} · {e.min} min</span><span className="xs muted">{e.level} · ca. {e.kcal} kcal</span></div>
+            <span className="k">+{Math.round(e.kcal * EXTRA_BACK / 10) * 10}</span>
+            <button className="x" onClick={() => removeExtra(e.id)} aria-label={`${EXTRA_LABEL[e.sport]} entfernen`}><Icon n="x" s /></button>
+          </div>
+        ))}
+        <div className="chips" role="group" aria-label="Sportart">
+          {(Object.keys(EXTRA_LABEL) as ExtraSport[]).map((k) => (
+            <button key={k} className={`chip ${exSport === k ? 'on' : ''}`} onClick={() => setExSport(k)}>{EXTRA_LABEL[k]}</button>
+          ))}
+        </div>
+        <div className="chips" role="group" aria-label="Intensität">
+          {(['leicht', 'mittel', 'hart'] as ExtraLevel[]).map((k) => (
+            <button key={k} className={`chip ${exLevel === k ? 'on' : ''}`} onClick={() => setExLevel(k)}>{k[0].toUpperCase() + k.slice(1)}</button>
+          ))}
+        </div>
+        <form className="row" style={{ gap: 8 }} onSubmit={(e) => { e.preventDefault(); addExtra(); }}>
+          <label className="in focus-in" style={{ flex: 1 }}>
+            <input inputMode="numeric" placeholder="Dauer in Minuten" value={exMin} onChange={(e) => setExMin(e.target.value)} aria-label="Dauer in Minuten" />
+          </label>
+          <button className="s6-btn s6-btn-quiet" type="submit" disabled={!exPreview}>Hinzufügen</button>
+        </form>
+        <div className="xs muted">
+          {exPreview ? `Schätzung ca. ${exPreview} kcal (±25 %), davon ${Math.round(exPreview * EXTRA_BACK / 10) * 10} kcal auf dein Tagesziel.` : `Von der Schätzung kommen ${Math.round(EXTRA_BACK * 100)} % aufs Tagesziel, der Rest schützt dein Defizit.`}
+        </div>
       </section>
 
       {proteinTip && date === today && (
