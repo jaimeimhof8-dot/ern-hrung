@@ -107,8 +107,10 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
     }
     return m;
   }, [data.diary]);
+  const byUsage = (meal: Meal) => (a: Template, b: Template) => (usage.get(`${meal}|${b.id}`) ?? 0) - (usage.get(`${meal}|${a.id}`) ?? 0);
+  const drinksFor = (meal: Meal): Template[] => data.templates.filter((x) => x.drink).sort(byUsage(meal)).slice(0, 6);
   const quickFor = (meal: Meal): Template[] =>
-    [...data.templates].sort((a, b) => (usage.get(`${meal}|${b.id}`) ?? 0) - (usage.get(`${meal}|${a.id}`) ?? 0)).slice(0, 6);
+    data.templates.filter((x) => !x.drink).sort((a, b) => (usage.get(`${meal}|${b.id}`) ?? 0) - (usage.get(`${meal}|${a.id}`) ?? 0)).slice(0, 6);
 
   const addTemplate = (tpl: Template, meal: Meal) => {
     const e = entryFromTemplate(tpl, 1, meal);
@@ -317,6 +319,7 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         const list = entries.filter((e) => e.meal === m.id);
         const sum = totals(list);
         const quick = quickFor(m.id);
+        const drinks = drinksFor(m.id);
         const yHas = yesterday.some((e) => e.meal === m.id);
         return (
           <section className="c tight" key={m.id}>
@@ -359,6 +362,16 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
                   <button className="qchip" key={q.id} onClick={() => addTemplate(q, m.id)}>{q.name}<small>{q.kcal} kcal</small></button>
                 ))}
               </div>
+            )}
+            {drinks.length > 0 && (
+              <>
+                <span className="xs muted">Getränke</span>
+                <div className="qrow">
+                  {drinks.map((q) => (
+                    <button className="qchip" key={q.id} onClick={() => addTemplate(q, m.id)}>{q.name}<small>{q.kcal} kcal</small></button>
+                  ))}
+                </div>
+              </>
             )}
           </section>
         );

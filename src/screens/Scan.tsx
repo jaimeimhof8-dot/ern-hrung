@@ -55,7 +55,7 @@ async function lookupEan(ean: string): Promise<Food | null> {
   };
 }
 
-export default function Scan({ meal, onFood, onEntries }: { meal: Meal; onFood: (f: Food) => void; onEntries: (list: Entry[]) => void }) {
+export default function Scan({ meal, onFood, onEntries, onSaveStandard }: { meal: Meal; onFood: (f: Food) => void; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void }) {
   const [kind, setKind] = useState<Kind>('barcode');
   return (
     <>
@@ -66,7 +66,7 @@ export default function Scan({ meal, onFood, onEntries }: { meal: Meal; onFood: 
       </div>
       {kind === 'barcode' && <Barcode onFood={onFood} />}
       {kind === 'etikett' && <Label onFood={onFood} />}
-      {kind === 'teller' && <Plate meal={meal} onEntries={onEntries} />}
+      {kind === 'teller' && <Plate meal={meal} onEntries={onEntries} onSaveStandard={onSaveStandard} />}
     </>
   );
 }
@@ -183,7 +183,9 @@ function Label({ onFood }: { onFood: (f: Food) => void }) {
   );
 }
 
-function Plate({ meal, onEntries }: { meal: Meal; onEntries: (list: Entry[]) => void }) {
+function Plate({ meal, onEntries, onSaveStandard }: { meal: Meal; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void }) {
+  const [stdName, setStdName] = useState('');
+  const [stdDrink, setStdDrink] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [items, setItems] = useState<PlateItem[] | null>(null);
@@ -229,6 +231,30 @@ function Plate({ meal, onEntries }: { meal: Meal; onEntries: (list: Entry[]) => 
           }
         >
           {sum} kcal hinzufügen
+        </button>
+        <div className="lab">Immer wieder gleich? Als Standard speichern</div>
+        <p className="xs muted">Prüfe die Werte oben zuerst. Gespeichert wird genau diese Schätzung, danach ohne Foto mit einem Tipp.</p>
+        <label className="f">
+          <span>Name</span>
+          <div className="in"><input value={stdName} onChange={(e) => setStdName(e.target.value)} placeholder="z. B. Cappuccino" /></div>
+        </label>
+        <div className="chips" role="group" aria-label="Art">
+          <button className={`chip ${!stdDrink ? 'on' : ''}`} onClick={() => setStdDrink(false)}>Essen</button>
+          <button className={`chip ${stdDrink ? 'on' : ''}`} onClick={() => setStdDrink(true)}>Getränk</button>
+        </div>
+        <button
+          className="s6-btn s6-btn-quiet w"
+          disabled={!stdName.trim() || !items.length}
+          onClick={() => {
+            onSaveStandard(
+              stdName,
+              items.map((x, i) => ({ id: `s${Date.now().toString(36)}${i}`, meal, name: x.name, amount: `${x.g} g`, kcal: x.kcal, p: x.p, c: x.c, f: x.f, est: true })),
+              stdDrink,
+            );
+            setStdName('');
+          }}
+        >
+          Als Standard speichern
         </button>
         <button className="link plain" onClick={() => setItems(null)}>Neues Foto</button>
       </>
