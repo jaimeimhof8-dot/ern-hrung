@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   DAY_LABEL,
   addDays,
@@ -84,6 +84,27 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         },
       },
     ]);
+  };
+
+  // Nachschlag: gleichen Eintrag skaliert kopieren, als geschätzt markieren
+  const [repeatId, setRepeatId] = useState<string | null>(null);
+  const REPEAT: [string, number][] = [['½', 0.5], ['¾', 0.75], ['Gleich', 1], ['1½', 1.5]];
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  const repeatEntry = (e: Entry, label: string, f: number) => {
+    const copy: Entry = {
+      ...e,
+      id: uid(),
+      foodId: undefined,
+      kcal: Math.round(e.kcal * f),
+      p: r1(e.p * f),
+      c: r1(e.c * f),
+      f: r1(e.f * f),
+      amount: `Nachschlag ${label}`,
+      est: true,
+    };
+    addEntries([copy]);
+    setRepeatId(null);
+    notify(`Nachschlag «${e.name}» ${label}: ${copy.kcal} kcal`, [{ label: 'Rückgängig', run: () => removeIds([copy.id]) }]);
   };
 
   const yesterday = data.diary[addDays(date, -1)] ?? [];
@@ -399,11 +420,21 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
                 </>
               );
               return (
-                <div className="ent" key={e.id}>
+                <Fragment key={e.id}>
+                <div className="ent">
                   {tpl ? <button className="t" onClick={() => setPortionId(e.id)} aria-label={`${e.name}: Portion ändern`}>{body}</button> : <div className="t">{body}</div>}
                   <span className="k">{e.kcal}</span>
+                  <button className="x" onClick={() => setRepeatId(repeatId === e.id ? null : e.id)} aria-label={`${e.name}: Nachschlag`} aria-expanded={repeatId === e.id}><Icon n="copy" s /></button>
                   <button className="x" onClick={() => removeIds([e.id])} aria-label={`${e.name} entfernen`}><Icon n="x" s /></button>
                 </div>
+                {repeatId === e.id && (
+                  <div className="qrow" role="group" aria-label={`Nachschlag ${e.name}`}>
+                    {REPEAT.map(([label, f]) => (
+                      <button className="qchip" key={label} onClick={() => repeatEntry(e, label, f)}>{label}<small>{Math.round(e.kcal * f)} kcal</small></button>
+                    ))}
+                  </div>
+                )}
+                </Fragment>
               );
             })}
             {list.length === 0 && quick.length === 0 && !yHas && <div className="xs muted">Noch nichts eingetragen</div>}
