@@ -56,6 +56,30 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
   const replaceEntry = (e: Entry) =>
     update((p) => ({ ...p, diary: { ...p.diary, [date]: (p.diary[date] ?? []).map((x) => (x.id === e.id ? e : x)) } }));
 
+  // Falsch eingetragenen Tag komplett auf heute verschieben (mit Rückgängig)
+  const moveDayToToday = () => {
+    const from = date;
+    const moved = entries;
+    const ids = moved.map((e) => e.id);
+    update((p) => {
+      const { [from]: _gone, ...rest } = p.diary;
+      return { ...p, diary: { ...rest, [today]: [...(rest[today] ?? []), ...moved] } };
+    });
+    setDate(today);
+    notify(`${moved.length} ${moved.length === 1 ? 'Eintrag' : 'Einträge'} auf heute verschoben`, [
+      {
+        label: 'Rückgängig',
+        run: () => {
+          update((p) => ({
+            ...p,
+            diary: { ...p.diary, [today]: (p.diary[today] ?? []).filter((e) => !ids.includes(e.id)), [from]: moved },
+          }));
+          setDate(from);
+        },
+      },
+    ]);
+  };
+
   const yesterday = data.diary[addDays(date, -1)] ?? [];
   const copyOf = (src: Entry[]) => src.map((e) => ({ ...e, id: uid() }));
   const copyDay = () => {
@@ -171,6 +195,13 @@ export default function Today({ date, setDate, data, update, onAdd, notify }: {
         next={['Folgetag', () => setDate(addDays(date, 1))]}
       />
       {date !== today && <div className="xs muted" style={{ padding: '0 4px' }}>{longDate(date)} · <button className="link" style={{ padding: 0 }} onClick={() => setDate(today)}>Zu heute</button></div>}
+      {date !== today && entries.length > 0 && (
+        <button className="c tight" style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} onClick={moveDayToToday}>
+          <Icon n="copy" />
+          <span className="grow"><span className="strong">Ganzen Tag auf heute verschieben</span><br /><span className="xs muted">{entries.length} {entries.length === 1 ? 'Eintrag' : 'Einträge'} · {Math.round(eaten.kcal)} kcal</span></span>
+          <Icon n="r" s />
+        </button>
+      )}
 
       <div className="strip" role="group" aria-label="Woche">
         {WD.map((w, i) => {
