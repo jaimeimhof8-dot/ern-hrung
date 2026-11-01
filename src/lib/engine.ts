@@ -111,6 +111,12 @@ export interface Extra {
   min: number;
   level: ExtraLevel;
   kcal: number;
+  /** aus Garmin übernommen (nicht von Hand) */
+  src?: 'garmin';
+  /** Garmin-Aktivitäts-ID, damit ein erneutes Abholen nichts doppelt anlegt */
+  gid?: string;
+  /** vom Nutzer ausgeblendet (z. B. war doch geplant); bleibt gespeichert, damit es nicht wiederkommt */
+  off?: boolean;
 }
 
 export interface Data {
@@ -305,7 +311,65 @@ export function extraKcal(sport: ExtraSport, min: number, level: ExtraLevel, wei
 }
 /** Kalorien aufs Tagesziel aus allen Zusatz-Einheiten eines Tages. */
 export function extraAdjust(list: Extra[] | undefined): number {
-  return Math.round(((list ?? []).reduce((a, e) => a + e.kcal, 0) * EXTRA_BACK) / 10) * 10;
+  return Math.round((activeExtras(list).reduce((a, e) => a + e.kcal, 0) * EXTRA_BACK) / 10) * 10;
+}
+export const activeExtras = (list: Extra[] | undefined): Extra[] => (list ?? []).filter((e) => !e.off);
+
+/** Aktivität aus Garmin (Antwort der Funktion «garmin», Aktion «sync») */
+export interface GarminAct {
+  id: string;
+  name: string;
+  group: string;
+  date: string;
+  /** Sekunden */
+  time: number;
+  /** Garmin-Gesamtkalorien der Einheit (inkl. Grundumsatz), falls vorhanden */
+  kcal: number | null;
+  hr: number | null;
+}
+
+const GARMIN_SPORT: Record<string, ExtraSport> = { run: 'lauf', ride: 'rad', strength: 'kraft', row: 'andere', ski: 'andere' };
+/** Welche Garmin-Sportgruppen die geplante Einheit eines Plantyps abdecken. Ruhetag: keine. */
+const PLAN_GROUPS: Record<string, string[]> = {
+  lauf: ['run'],
+  bike: ['ride'],
+  kraft: ['strength'],
+  station: ['run', 'row', 'ski', 'strength'],
+  sim: ['run', 'row', 'ski', 'strength'],
+  race: ['run', 'row', 'ski', 'strength'],
+};
+
+/**
+ * Garmin-Aktivitäten eines Tages, die NICHT zum Plan gehören.
+ * Pro geplanter Einheit zählt die längste passende Aktivität als geplant (Station/Sim/Race: bis zu zwei, z. B. Kraft + Lauf).
+ * Alles andere ist eine Zusatz-Einheit. Kalorien: Garmin-Wert minus Grundumsatz in der Zeit (netto), sonst MET-Schätzung.
+ */
+export function garminExtrasForDay(date: string, acts: GarminAct[], d: Data): Extra[] {
+  const day = acts.filter((a) => a.date === date && a.time >= 12 * 60).sort((x, y) => y.time - x.time);
+  const k = trainingFor(date)?.k ?? 'rest';
+  const groups = PLAN_GROUPS[k] ?? [];
+  const limit = groups.length > 1 ? 2 : 1;
+  const used = new Set<string>();
+  const taken = new Set<string>();
+  for (const a of day) {
+    if (used.size >= limit) break;
+    if (groups.includes(a.group) && (limit === 1 || !taken.has(a.group))) {
+      used.add(a.id);
+      taken.add(a.group);
+    }
+  }
+  const weight = currentWeight(date, d);
+  const restPerHour = effectiveTdee(d.settings, weight) / 1.55 / 24;
+  return day
+    .filter((a) => !used.has(a.id) && GARMIN_SPORT[a.group])
+    .map((a) => {
+      const sport = GARMIN_SPORT[a.group];
+      const min = Math.round(a.time / 60);
+      const kcal = a.kcal != null && a.kcal > 0
+        ? Math.max(0, Math.round((a.kcal - restPerHour * (a.time / 3600)) / 10) * 10)
+        : extraKcal(sport, min, 'mittel', weight);
+      return { id: `g-${a.id}`, sport, min, level: 'mittel' as ExtraLevel, kcal, src: 'garmin' as const, gid: a.id };
+    });
 }
 
 // ---------- Tagestyp aus dem Trainingsplan ----------
@@ -541,7 +605,7 @@ export function computeDay(date: string, d: Data): DayPlan {
   const extra = extraAdjust(d.extras?.[date]);
   if (extra > 0 && !outside) {
     kcal += extra;
-    notes.push(`+${extra} kcal durch Zusatz-Einheit (${Math.round(EXTRA_BACK * 100)} % von ${(d.extras[date] ?? []).reduce((a, e) => a + e.kcal, 0)} kcal).`);
+    notes.push(`+${extra} kcal durch Zusatz-Einheit (${Math.round(EXTRA_BACK * 100)} % von ${activeExtras(d.extras[date]).reduce((a, e) => a + e.kcal, 0)} kcal).`);
   }
 
   const eee = EEE[type];

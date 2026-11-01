@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { DEFAULT_DATA, extraKcal, computeDay, classify, addDays, adaptAfterWeighIn, type Data } from './engine';
+import { DEFAULT_DATA, extraKcal, garminExtrasForDay, computeDay, classify, addDays, adaptAfterWeighIn, type Data } from './engine';
 
 const base: Data = {
   ...DEFAULT_DATA,
@@ -131,4 +131,17 @@ assert.equal(extraKcal('rad', 90, 'mittel', 80), 840);
 const withExtra = computeDay('2026-10-13', { ...base, extras: { '2026-10-13': [{ id: 'x', sport: 'rad', min: 90, level: 'mittel', kcal: 840 }] } });
 assert.equal(withExtra.kcal, computeDay('2026-10-13', base).kcal + 500);
 assert.ok(withExtra.notes.some((n) => n.includes('Zusatz-Einheit')));
+// Garmin: Samstag 17.10.2026 = Plantag 5 (Bike). Lange Fahrt = geplant, zweite Fahrt = Zusatz. Ruhetag (Fr 16.10.): alles Zusatz.
+const sat = '2026-10-17';
+const acts = [
+  { id: 'g1', name: 'Lange Fahrt', group: 'ride', date: sat, time: 5400, kcal: 900, hr: 130 },
+  { id: 'g2', name: 'Zusatz Rad', group: 'ride', date: sat, time: 3600, kcal: 700, hr: 140 },
+  { id: 'g3', name: 'Spaziergang', group: 'other', date: sat, time: 3600, kcal: 200, hr: 90 },
+];
+const gx = garminExtrasForDay(sat, acts, base);
+assert.equal(gx.length, 1);
+assert.equal(gx[0].gid, 'g2');
+assert.equal(gx[0].sport, 'rad');
+assert.ok(gx[0].kcal > 0 && gx[0].kcal < 700);
+assert.equal(garminExtrasForDay('2026-10-16', [{ id: 'g4', name: 'Lauf', group: 'run', date: '2026-10-16', time: 1800, kcal: 300, hr: 150 }], base).length, 1);
 console.log('Funktionstests ok');

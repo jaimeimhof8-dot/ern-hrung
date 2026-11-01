@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toISO, type Meal } from './lib/engine';
+import { addDays, garminExtrasForDay, toISO, type Extra, type Meal } from './lib/engine';
 import { Icon, mealByClock, type IconName, type Notify, type ToastAction } from './ui';
 import AddFood from './screens/AddFood';
 import { useData } from './lib/storage';
-import { fetchGarminSteps, garminUser } from './lib/garmin';
+import { fetchGarminActs, fetchGarminSteps, garminUser } from './lib/garmin';
 import Onboarding from './screens/Onboarding';
 import Today from './screens/Today';
 import Week from './screens/Week';
@@ -62,6 +62,39 @@ export default function App() {
       update((p) => {
         const cur = p.steps ?? {};
         return Object.entries(st).some(([d, n]) => cur[d] !== n) ? { ...p, steps: { ...cur, ...st } } : p;
+      });
+      // Zusatz-Einheiten: Garmin-Aktivitäten ausserhalb des Plans übernehmen (höchstens alle 20 Minuten, der Abruf ist schwer)
+      let last = 0;
+      try {
+        last = Number(localStorage.getItem('s60.garmin.acts')) || 0;
+      } catch {
+        /* gesperrt: einfach abrufen */
+      }
+      if (Date.now() - last < 20 * 60 * 1000) return;
+      const acts = await fetchGarminActs(7).catch(() => null);
+      if (!alive || !acts) return;
+      try {
+        localStorage.setItem('s60.garmin.acts', String(Date.now()));
+      } catch {
+        /* ignorieren */
+      }
+      update((p) => {
+        const today = toISO(new Date());
+        const next = { ...(p.extras ?? {}) };
+        let changed = false;
+        for (let i = 0; i < 7; i++) {
+          const d = addDays(today, -i);
+          const old = next[d] ?? [];
+          const off = new Set(old.filter((e) => e.src === 'garmin' && e.off).map((e) => e.gid));
+          const fresh: Extra[] = garminExtrasForDay(d, acts, p).map((e) => ({ ...e, off: off.has(e.gid) || undefined }));
+          const merged = [...old.filter((e) => e.src !== 'garmin'), ...fresh];
+          if (JSON.stringify(merged) !== JSON.stringify(old)) {
+            changed = true;
+            if (merged.length) next[d] = merged;
+            else delete next[d];
+          }
+        }
+        return changed ? { ...p, extras: next } : p;
       });
     };
     pull();
