@@ -118,6 +118,8 @@ button.food { width: 100%; text-align: left; }
 .seg > button.on { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-edge); }
 .tabs3 { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; background: var(--well); border-radius: var(--r-pill); padding: 4px; flex: none; }
 .tabs3 button { min-height: 44px; }
+.tabs3 { overflow-x: auto; scrollbar-width: none; }
+.tabs3 button { min-width: 64px; padding-inline: 10px; white-space: nowrap; }
 .sheet .chips { flex-wrap: nowrap; gap: 6px; }
 .sheet .chips .chip { flex: 1; justify-content: center; padding: 0 6px; font-size: 12.5px; white-space: nowrap; }
 .sheet .chips.free { flex-wrap: wrap; }

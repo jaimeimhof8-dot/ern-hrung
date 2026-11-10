@@ -4,9 +4,10 @@ import { MEALS, entryFromFood, entryFromTemplate, makeTemplate, totals } from '.
 import { BUILTIN_FOODS, precisionOf, searchFoods } from '../lib/foods';
 import Scan from './Scan';
 import { Describe } from './Describe';
+import { Weigh } from './Weigh';
 import { Icon, Sheet, num, type Notify, type Update } from '../ui';
 
-type Mode = 'suche' | 'scan' | 'beschreiben' | 'mahlzeiten' | 'schnell' | 'eigen';
+type Mode = 'suche' | 'wiegen' | 'scan' | 'beschreiben' | 'mahlzeiten' | 'schnell' | 'eigen';
 
 interface Props {
   meal: Meal;
@@ -172,6 +173,7 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
             {(
               [
                 ['suche', 'Suchen'],
+                ['wiegen', 'Wiegen'],
                 ['scan', 'Scan'],
                 ['beschreiben', 'Text'],
                 ['mahlzeiten', 'Mahlzeiten'],
@@ -195,7 +197,9 @@ export default function AddFood({ meal: initialMeal, date, data, update, notify,
             />
           )}
 
-          {mode === 'beschreiben' && <Describe meal={meal} onEntries={addEntries} onSaveStandard={saveStandard} />}
+          {mode === 'wiegen' && <Weigh meal={meal} data={data} pool={pool} onEntries={addEntries} />}
+
+          {mode === 'beschreiben' && <Describe meal={meal} pool={pool} onEntries={addEntries} onSaveStandard={saveStandard} />}
 
           {mode === 'scan' && <Scan meal={meal} onFood={pickScanned} onEntries={addEntries} onSaveStandard={saveStandard} />}
 
