@@ -13,11 +13,14 @@ const PROMPTS = {
     'Nährwerte aus üblichen Tabellenwerten pro 100 g des jeweiligen Lebensmittels (kcal muss zu 4·p + 4·c + 9·f passen, Abweichung höchstens 10 %). Getränke nur, wenn sie kalorienhaltig sind. ' +
     'Antworte NUR mit JSON: {"items":[{"name":string (deutsch),"g":number,"kcal":number,"p":number,"c":number,"f":number}]}. Ist kein Essen zu sehen: {"items":[]}.',
   text:
-    'Der Nutzer beschreibt in einem Satz, was er gegessen oder getrunken hat, ohne gewogen zu haben. Zerlege es in einzelne Posten und schätze Gewicht (bei Getränken Millilitern in "g") und Nährwerte. ' +
-    'Regeln: Nutze die genannten Mengen und Stückzahlen. Fehlt eine Menge, nimm eine übliche Portion in der Schweiz (nicht knapp, nicht grosszügig). Bei Gerichten mit Zutaten (z. B. Raclette: Käse, Kartoffeln) jede Zutat als eigenen Posten. ' +
-    'Alkohol und kalorienhaltige Getränke immer mitzählen. Erfinde nichts dazu, was nicht genannt ist; Beilagen nur, wenn sie zum genannten Gericht üblich sind und nenne sie dann klar als eigenen Posten. ' +
-    'Nährwerte aus üblichen Tabellenwerten (kcal muss zu 4·p + 4·c + 9·f + 7·Alkohol passen, bei Alkohol darf kcal höher sein). ' +
-    'Antworte NUR mit JSON: {"items":[{"name":string (deutsch),"g":number,"kcal":number,"p":number,"c":number,"f":number}]}. Ist nichts Essbares beschrieben: {"items":[]}.',
+    'Der Nutzer beschreibt (getippt oder diktiert, deshalb evtl. mit Tipp- oder Hörfehlern, ohne Satzzeichen, in Umgangssprache oder Schweizer Ausdrücken) was er gegessen oder getrunken hat, ohne gewogen zu haben. ' +
+    'Das können mehrere Mahlzeiten oder Gerichte in einer Beschreibung sein. Korrigiere offensichtliche Hör- und Tippfehler still (z. B. «Hüttenkäse» für «Hütten Käse», «Pepperoni» als Peperoni/Salami je nach Zusammenhang). ' +
+    'SCHRITT 1 – Gericht erkennen: Prüfe, ob die genannten Zutaten zusammen ein bekanntes Gericht ergeben (z. B. Salat + Chicken + Parmesan/Croutons/Dressing = Caesar Salad; Hüttenkäse, Tomaten, Pepperoni, Salat, Chicken ist ein Salat-Teller mit Poulet, am ehesten als «Caesar Salad» oder «Poulet-Salat» zu benennen). Wenn ja, gib ein Gericht mit passendem Namen zurück. Wenn die Zutaten kein bekanntes Gericht ergeben, nimm einen beschreibenden Namen (z. B. «Salat mit Poulet und Hüttenkäse»). Eine Mahlzeit ohne Zutatenliste (z. B. «Cappuccino», «Apfel») ist ein Gericht mit einem Posten. ' +
+    'SCHRITT 2 – Zerlegen und schätzen: Jede genannte Zutat wird ein Posten mit Gewicht (bei Getränken Milliliter in "g") und Nährwerten. Nutze genannte Mengen und Stückzahlen. Fehlt eine Menge, nimm eine übliche Portion in der Schweiz (nicht knapp, nicht grosszügig). ' +
+    'Ergänze nur die für das erkannte Gericht typischen, aber nicht genannten Bestandteile (z. B. Dressing und Croutons beim Caesar Salad), jeweils als eigenen Posten mit "assumed":true. Genannte Zutaten haben "assumed":false. Erfinde sonst nichts dazu. ' +
+    'Alkohol und kalorienhaltige Getränke immer mitzählen. Nährwerte aus üblichen Tabellenwerten (kcal muss zu 4·p + 4·c + 9·f + 7·Alkohol passen, bei Alkohol darf kcal höher sein). ' +
+    '"meal" ist die Mahlzeit, falls der Nutzer sie nennt oder es eindeutig ist (fruehstueck=Frühstück, mittag=Mittag, abend=Abend, snack=Zwischenmahlzeit), sonst null. ' +
+    'Antworte NUR mit JSON: {"meals":[{"name":string (deutsch, Gerichtname),"meal":"fruehstueck"|"mittag"|"abend"|"snack"|null,"items":[{"name":string (deutsch),"g":number,"kcal":number,"p":number,"c":number,"f":number,"assumed":boolean}]}]}. Ist nichts Essbares beschrieben: {"meals":[]}.',
 };
 
 export default async function handler(req, res) {
@@ -34,14 +37,14 @@ export default async function handler(req, res) {
   const { kind, image, text: desc } = req.body || {};
   const isText = kind === 'text';
   if (!(kind in PROMPTS)) return send(400, { error: 'Eingabe' });
-  if (isText ? typeof desc !== 'string' || !desc.trim() || desc.length > 600 : typeof image !== 'string' || image.length > 3_000_000) return send(400, { error: 'Eingabe' });
+  if (isText ? typeof desc !== 'string' || !desc.trim() || desc.length > 1000 : typeof image !== 'string' || image.length > 3_000_000) return send(400, { error: 'Eingabe' });
   try {
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: 'claude-sonnet-5-5',
-        max_tokens: 1024,
+        max_tokens: isText ? 2048 : 1024,
         messages: [{
           role: 'user',
           content: isText
@@ -56,14 +59,26 @@ export default async function handler(req, res) {
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return send(502, { error: 'Antwort nicht lesbar' });
     const out = JSON.parse(m[0]);
-    if ((kind === 'teller' || isText) && Array.isArray(out.items)) {
-      // kcal und Makros müssen zusammenpassen: bei mehr als 10 % Abweichung gilt der Makro-Wert
-      out.items = out.items.map((x) => {
-        const calc = Math.round(4 * (x.p || 0) + 4 * (x.c || 0) + 9 * (x.f || 0));
-        // Text: Alkohol hat Kalorien ohne Makros, dort gilt der höhere Wert; sonst gilt wie beim Foto der Makro-Wert
-        if (isText && x.kcal > calc) return x;
-        return calc > 0 && Math.abs(calc - x.kcal) > 0.1 * calc ? { ...x, kcal: calc } : x;
-      });
+    // kcal und Makros müssen zusammenpassen: bei mehr als 10 % Abweichung gilt der Makro-Wert
+    const fix = (x) => {
+      const calc = Math.round(4 * (x.p || 0) + 4 * (x.c || 0) + 9 * (x.f || 0));
+      // Text: Alkohol hat Kalorien ohne Makros, dort gilt der höhere Wert; sonst gilt wie beim Foto der Makro-Wert
+      if (isText && x.kcal > calc) return x;
+      return calc > 0 && Math.abs(calc - x.kcal) > 0.1 * calc ? { ...x, kcal: calc } : x;
+    };
+    if (kind === 'teller' && Array.isArray(out.items)) out.items = out.items.map(fix);
+    if (isText) {
+      const MEALS = ['fruehstueck', 'mittag', 'abend', 'snack'];
+      const list = Array.isArray(out.meals) ? out.meals : Array.isArray(out.items) ? [{ name: '', items: out.items }] : [];
+      out.meals = list
+        .filter((m) => m && Array.isArray(m.items))
+        .map((m) => ({
+          name: typeof m.name === 'string' ? m.name.slice(0, 80) : '',
+          meal: MEALS.includes(m.meal) ? m.meal : null,
+          items: m.items.filter((x) => x && typeof x.name === 'string' && x.g > 0).map(fix),
+        }))
+        .filter((m) => m.items.length);
+      delete out.items;
     }
     send(200, out);
   } catch {

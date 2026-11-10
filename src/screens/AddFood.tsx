@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import type { Data, Entry, Food, Meal, Template } from '../lib/engine';
 import { MEALS, entryFromFood, entryFromTemplate, makeTemplate, totals } from '../lib/analytics';
 import { BUILTIN_FOODS, precisionOf, searchFoods } from '../lib/foods';
-import Scan, { Describe } from './Scan';
+import Scan from './Scan';
+import { Describe } from './Describe';
 import { Icon, Sheet, num, type Notify, type Update } from '../ui';
 
 type Mode = 'suche' | 'scan' | 'beschreiben' | 'mahlzeiten' | 'schnell' | 'eigen';

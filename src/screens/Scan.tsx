@@ -27,8 +27,8 @@ async function shrink(file: File): Promise<string> {
   return cv.toDataURL('image/jpeg', 0.8).split(',')[1];
 }
 
-async function vision(kind: 'etikett' | 'teller' | 'text', input: string) {
-  const payload = kind === 'text' ? { kind, text: input } : { kind, image: input };
+async function vision(kind: 'etikett' | 'teller', input: string) {
+  const payload = { kind, image: input };
   const res = await fetch('/api/vision', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(await accessToken()) ?? ''}` }, body: JSON.stringify(payload) });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'Analyse fehlgeschlagen');
@@ -184,24 +184,18 @@ function Label({ onFood }: { onFood: (f: Food) => void }) {
   );
 }
 
-/** Tab «Beschreiben»: Essen in einem Satz beschreiben, ohne Waage und ohne Foto. */
-export function Describe(props: { meal: Meal; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void }) {
-  return <Plate {...props} text />;
-}
-
-function Plate({ meal, onEntries, onSaveStandard, text = false }: { meal: Meal; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void; text?: boolean }) {
-  const [desc, setDesc] = useState('');
+function Plate({ meal, onEntries, onSaveStandard }: { meal: Meal; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void }) {
   const [stdName, setStdName] = useState('');
   const [stdDrink, setStdDrink] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [items, setItems] = useState<PlateItem[] | null>(null);
-  const run = async (file: File | null) => {
+  const run = async (file: File) => {
     setBusy(true);
     setErr('');
     try {
-      const r = file ? await vision('teller', await shrink(file)) : await vision('text', desc.trim());
-      if (!Array.isArray(r.items) || !r.items.length) throw new Error(file ? 'Auf dem Foto ist kein Essen erkannt worden.' : 'Aus der Beschreibung konnte ich kein Essen herauslesen. Nenne Gericht und Menge, z. B. «5 Pfännli Raclette».');
+      const r = await vision('teller', await shrink(file));
+      if (!Array.isArray(r.items) || !r.items.length) throw new Error('Auf dem Foto ist kein Essen erkannt worden.');
       setItems(r.items);
     } catch (e) {
       setErr((e as Error).message);
@@ -215,7 +209,7 @@ function Plate({ meal, onEntries, onSaveStandard, text = false }: { meal: Meal; 
     const sum = items.reduce((a, x) => a + x.kcal, 0);
     return (
       <>
-        <p className="sm muted">Das ist eine Schätzung{text ? ' aus deiner Beschreibung' : ''}. Passe die Gramm an, wenn du es besser weisst.{text ? ' Streiche, was nicht stimmt, mit dem X.' : ''}</p>
+        <p className="sm muted">Das ist eine Schätzung. Passe die Gramm an, wenn du es besser weisst.</p>
         {items.map((x, i) => (
           <div className="ent" key={i}>
             <div className="t">
@@ -263,20 +257,7 @@ function Plate({ meal, onEntries, onSaveStandard, text = false }: { meal: Meal; 
         >
           Als Standard speichern
         </button>
-        <button className="link plain" onClick={() => setItems(null)}>{text ? 'Neu beschreiben' : 'Neues Foto'}</button>
-      </>
-    );
-  }
-  if (text) {
-    return (
-      <>
-        <p className="sm muted">Beschreibe in einem Satz, was du gegessen oder getrunken hast, ohne zu wägen. Nenne Mengen, so gut du kannst.</p>
-        <label className="f">
-          <span>Was hast du gegessen?</span>
-          <div className="in"><textarea rows={3} maxLength={600} value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="z. B. Raclette, 5 Pfännli mit Kartoffeln, 2 Gläser Weisswein" style={{ width: '100%', background: 'transparent', border: 0, color: 'inherit', font: 'inherit', resize: 'vertical' }} /></div>
-        </label>
-        <button className="s6-btn s6-btn-primary w" disabled={busy || desc.trim().length < 3} onClick={() => run(null)}>{busy ? 'Schätze …' : 'Schätzen'}</button>
-        {err && <p className="sm" role="alert">{err}</p>}
+        <button className="link plain" onClick={() => setItems(null)}>Neues Foto</button>
       </>
     );
   }
