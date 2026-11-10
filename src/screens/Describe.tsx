@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Entry, Meal } from '../lib/engine';
+import type { Entry, Food, Meal } from '../lib/engine';
 import { accessToken } from '../lib/garmin';
 import { MEALS } from '../lib/analytics';
 import { Icon, num } from '../ui';
@@ -13,6 +13,10 @@ interface Item {
   f: number;
   /** vom Gericht her üblich, vom Nutzer aber nicht genannt */
   assumed?: boolean;
+  /** exakter Name eines bekannten Lebensmittels; dann gelten dessen Tabellenwerte */
+  match?: string | null;
+  foodId?: string;
+  fromDb?: boolean;
 }
 
 interface Dish {
@@ -30,15 +34,23 @@ const sumOf = (items: Item[]) =>
 /** Browser-Diktat (Chrome, Edge, Safari/iOS). Firefox hat es nicht: dort bleibt das Mikrofon der Tastatur. */
 const SR: any = typeof window !== 'undefined' ? (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition : undefined;
 
-async function describe(text: string) {
-  const res = await fetch('/api/vision', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(await accessToken()) ?? ''}` }, body: JSON.stringify({ kind: 'text', text }) });
+async function describe(text: string, foods: string[]) {
+  const res = await fetch('/api/vision', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${(await accessToken()) ?? ''}` }, body: JSON.stringify({ kind: 'text', text, foods }) });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || 'Analyse fehlgeschlagen');
   return body as { meals?: { name: string; meal: Meal | null; items: Item[] }[] };
 }
 
 /** Tab «Beschreiben»: Essen tippen oder diktieren, die App erkennt das Gericht und schätzt es. */
-export function Describe({ meal, onEntries, onSaveStandard }: { meal: Meal; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void }) {
+/** Posten mit bekanntem Lebensmittel: Nährwerte aus der Tabelle statt aus der Schätzung des Modells. */
+function anchor(x: Item, pool: Food[]): Item {
+  const f = x.match ? pool.find((p) => p.name === x.match) : undefined;
+  if (!f) return { ...x, match: null };
+  const k = x.g / 100;
+  return { ...x, name: f.name, kcal: Math.round(f.kcal * k), p: r1(f.p * k), c: r1(f.c * k), f: r1(f.f * k), foodId: f.id, fromDb: true };
+}
+
+export function Describe({ meal, pool, onEntries, onSaveStandard }: { meal: Meal; pool: Food[]; onEntries: (list: Entry[]) => void; onSaveStandard: (name: string, items: Entry[], drink: boolean) => void }) {
   const [desc, setDesc] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -92,10 +104,10 @@ export function Describe({ meal, onEntries, onSaveStandard }: { meal: Meal; onEn
     setBusy(true);
     setErr('');
     try {
-      const r = await describe([desc, interim].filter(Boolean).join(' ').trim());
+      const r = await describe([desc, interim].filter(Boolean).join(' ').trim(), [...new Set(pool.map((f) => f.name))].slice(0, 200));
       if (!r.meals?.length) throw new Error('Aus der Beschreibung konnte ich kein Essen herauslesen. Nenne Zutaten oder Gericht, z. B. «Salat, Chicken, Hüttenkäse, Tomaten».');
       // Mehrere Zutaten = ein Gericht (ein Eintrag); der Nutzer kann sie aufteilen
-      setDishes(r.meals.map((m) => ({ name: m.name || m.items[0].name, meal: m.meal ?? meal, items: m.items, split: m.items.length === 1 })));
+      setDishes(r.meals.map((m) => ({ name: m.name || m.items[0].name, meal: m.meal ?? meal, items: m.items.map((x) => anchor(x, pool)), split: m.items.length === 1 })));
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -113,7 +125,7 @@ export function Describe({ meal, onEntries, onSaveStandard }: { meal: Meal; onEn
 
   const toEntries = (dish: Dish, tag: number): Entry[] => {
     const id = (n: number) => `s${Date.now().toString(36)}${tag}${n}`;
-    if (dish.split) return dish.items.map((x, n) => ({ id: id(n), meal: dish.meal, name: x.name, amount: `${x.g} g`, kcal: x.kcal, p: x.p, c: x.c, f: x.f, est: true }));
+    if (dish.split) return dish.items.map((x, n) => ({ id: id(n), meal: dish.meal, name: x.name, amount: `${x.g} g`, kcal: x.kcal, p: x.p, c: x.c, f: x.f, est: true, ...(x.foodId ? { foodId: x.foodId } : {}) }));
     const s = sumOf(dish.items);
     return [{ id: id(0), meal: dish.meal, name: dish.name.trim() || 'Mahlzeit', amount: `ca. ${Math.round(s.g)} g`, kcal: s.kcal, p: r1(s.p), c: r1(s.c), f: r1(s.f), est: true }];
   };
@@ -146,7 +158,7 @@ export function Describe({ meal, onEntries, onSaveStandard }: { meal: Meal; onEn
                   <div className="ent" key={k}>
                     <div className="t">
                       <span className="strong">{x.name}</span>
-                      <span className="xs muted">{x.assumed ? 'üblich dazu, nicht genannt · ' : ''}{x.p} P · {x.c} C · {x.f} F</span>
+                      <span className="xs muted">{x.assumed ? 'üblich dazu, nicht genannt · ' : ''}{x.fromDb ? 'Tabellenwerte · ' : ''}{x.p} P · {x.c} C · {x.f} F</span>
                     </div>
                     <label className="in" style={{ width: 84 }}>
                       <input inputMode="decimal" defaultValue={x.g} key={x.g} onBlur={(e) => { const g = num(e.target.value); if (g) scale(i, k, g); }} aria-label={`${x.name} Gramm`} />
